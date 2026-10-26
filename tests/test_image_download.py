@@ -224,6 +224,43 @@ class DownloadWorkflowTests(unittest.TestCase):
 
 
 class WindowsAriaTests(unittest.TestCase):
+    def test_unverified_legacy_temp_clients_are_not_discovered(self):
+        for arm, folder, machine in ((False, "win_usb_tools", b"\x64\x86"),
+                                     (True, "win_usb_tools_arm64", b"\x64\xaa")):
+            with self.subTest(arm=arm), tempfile.TemporaryDirectory() as temp:
+                candidate = Path(temp) / folder / "aria2c.exe"
+                candidate.parent.mkdir()
+                binary = bytearray(70)
+                binary[:2] = b"MZ"
+                struct.pack_into("<I", binary, 0x3C, 64)
+                binary[64:70] = b"PE\0\0" + machine
+                candidate.write_bytes(binary)
+                with patch.object(download.sys, "platform", "win32"), \
+                        patch.object(download, "windows_arm64", return_value=arm), \
+                        patch.object(download.shutil, "which", return_value=None), \
+                        patch.object(download.tempfile, "gettempdir", return_value=temp):
+                    self.assertIsNone(download.find_aria2())
+
+    def test_legacy_temp_client_cannot_bypass_verified_bootstrap(self):
+        with tempfile.TemporaryDirectory() as temp:
+            candidate = Path(temp) / "win_usb_tools" / "aria2c.exe"
+            candidate.parent.mkdir()
+            binary = bytearray(70)
+            binary[:2] = b"MZ"
+            struct.pack_into("<I", binary, 0x3C, 64)
+            binary[64:70] = b"PE\0\0\x64\x86"
+            candidate.write_bytes(binary)
+            with patch.object(download.sys, "platform", "win32"), \
+                    patch.object(download, "windows_arm64", return_value=False), \
+                    patch.object(download.shutil, "which", return_value=None), \
+                    patch.object(download.tempfile, "gettempdir", return_value=temp), \
+                    patch.dict(os.environ, {"LOCALAPPDATA": temp}), \
+                    patch.object(download, "fetch", side_effect=lambda url, path, **kwargs: Path(path).write_bytes(b"not upstream")) as get:
+                with self.assertRaises(download.DownloadError):
+                    download.ensure_windows_aria2()
+                get.assert_called_once()
+                self.assertEqual(candidate.read_bytes(), binary)
+
     def test_native_arm64_rejects_x64_aria(self):
         with tempfile.TemporaryDirectory() as temp:
             candidate = Path(temp) / "aria2c.exe"

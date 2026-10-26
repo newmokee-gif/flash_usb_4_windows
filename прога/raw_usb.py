@@ -22,6 +22,7 @@ import sys
 import time
 
 CHUNK = 4 * 1024 * 1024
+MAC_CLAIM_TIMEOUT = 30.0
 
 
 class USBError(RuntimeError):
@@ -231,6 +232,7 @@ class _MacClaim:
         self.session = self.disk = None
         self.claimed = self.done = self.registered = self.scheduled = False
         self.claim_status = None
+        self.claim_elapsed = None
         self.runloop_results = {}
         self.approval = c.CFUNCTYPE(void, void, void)(self._approve)
         self.release = c.CFUNCTYPE(void, void, void)(lambda disk, ctx: self._deny())
@@ -282,15 +284,23 @@ class _MacClaim:
             self.scheduled = True
             self.da.DARegisterDiskMountApprovalCallback(self.session, None, self.approval, None)
             self.registered = True
+            # DiskArbitration can still be completing media/volume callbacks
+            # after diskutil reports unmount success. The same first-claim
+            # delay is observable through Apple's native C API. Wait boundedly
+            # for an actual successful completion, never infer a claim from
+            # an elapsed timeout or an unmounted volume alone.
+            started = time.monotonic()
             self.da.DADiskClaim(self.disk, 0, self.release, None, self.callback, None)
-            deadline = time.monotonic() + 10
+            deadline = started + MAC_CLAIM_TIMEOUT
             while not self.done and time.monotonic() < deadline:
                 result = self.cf.CFRunLoopRunInMode(self.mode, 0.05, False)
                 self.runloop_results[result] = self.runloop_results.get(result, 0) + 1
                 if result == 1:  # kCFRunLoopRunFinished: no scheduled sources.
                     break
+            self.claim_elapsed = time.monotonic() - started
             if not self.done:
                 raise USBError("DiskArbitration claim timed out without invoking its completion callback; "
+                               f"elapsed={self.claim_elapsed:.3f}s; "
                                f"runloop results={self.runloop_results} "
                                "(1=no sources, 2=stopped, 3=timed out, 4=source handled); "
                                f"mode={self._description(self.mode)}; session={self._description(self.session)}")
@@ -524,7 +534,10 @@ def write_image(image, path, confirmation, expected_identity, expected_sha256, l
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
     fd = os.open(source_path, flags)
     try:
-        with os.fdopen(fd, "rb") as source:
+        # Keep one unbuffered source descriptor throughout validation/copy and
+        # final re-read. A BufferedReader could replay its old small-file cache
+        # after seek(0), hiding mutation by another process on Windows.
+        with os.fdopen(fd, "rb", buffering=0) as source:
             fd = None
             metadata = os.fstat(source.fileno())
             _require(stat.S_ISREG(metadata.st_mode) and metadata.st_size > 0, "Source is not a nonempty regular image file")
@@ -548,6 +561,15 @@ def write_image(image, path, confirmation, expected_identity, expected_sha256, l
                 log("Побайтовая запись GNU/Linux-образа…")
                 _copy_and_verify(source, target, metadata.st_size, digest, log)
                 _require(_source_state(os.fstat(source.fileno())) == _source_state(metadata), "Source image changed during writing")
+                # Windows may cache LastWriteTime while a file handle remains
+                # open. Metadata and the bytes already copied are not proof
+                # that the source remained unchanged after its last read.
+                # Rehash the same unbuffered descriptor; never reopen a path.
+                log("Повторная проверка SHA-256 исходного файла…")
+                source.seek(0)
+                _require(_digest(source, metadata.st_size) == digest and not source.read(1),
+                         "Source image changed during writing (post-write SHA-256 mismatch)")
+                _require(_source_state(os.fstat(source.fileno())) == _source_state(metadata), "Source image changed during final validation")
             log("Готово. SHA-256 записанных данных совпадает с исходным образом.")
     finally:
         if fd is not None:

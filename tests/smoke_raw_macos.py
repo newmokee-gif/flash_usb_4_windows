@@ -76,11 +76,12 @@ def exercise(image, read_only, native_probe):
         with open(device, "rb", buffering=0) as source:
             first_sector = source.read(sector)
         print(f"Claiming {'readonly' if read_only else 'writable'} unmounted FAT32 virtual image", flush=True)
-        native = subprocess.run([str(native_probe), device], text=True, capture_output=True, timeout=20)
+        native = subprocess.run([str(native_probe), device], text=True, capture_output=True, timeout=45)
         print(native.stdout, end="", flush=True)
         if native.stderr:
             print(native.stderr, end="", flush=True)
         with raw_usb._MacClaim(device) as claim:
+            print(f"Python claim callback completed in {claim.claim_elapsed:.3f}s", flush=True)
             claim.pump()
             flags = (os.O_RDONLY if read_only else os.O_RDWR) | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
             descriptor = os.open(device, flags)

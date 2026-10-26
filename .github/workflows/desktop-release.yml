@@ -95,8 +95,12 @@ jobs:
       - name: Verify official aria2 helper on the native Windows host
         shell: pwsh
         run: |
-          python -c 'import sys, subprocess; sys.path.insert(0,"прога"); from image_download import ensure_windows_aria2; executable=ensure_windows_aria2(log=print, allow_emulation=True); result=subprocess.run([executable,"--no-conf=true","--version"], text=True, capture_output=True, timeout=30, check=True); print(result.stdout); assert "BitTorrent" in result.stdout'
-          exit $LASTEXITCODE
+          python -X utf8 -c 'import sys, subprocess; sys.path.insert(0,"прога"); from image_download import ensure_windows_aria2; executable=ensure_windows_aria2(log=print, allow_emulation=True); result=subprocess.run([executable,"--no-conf=true","--version"], text=True, capture_output=True, timeout=30, check=True); print(result.stdout); assert "BitTorrent" in result.stdout' 2>&1 | Tee-Object -FilePath aria-verification.log
+          $result = $LASTEXITCODE
+          if ($result -ne 0) {
+            python -X utf8 -c 'from pathlib import Path; t=Path("aria-verification.log").read_text(errors="replace")[-3500:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          }
+          exit $result
       - name: Download and verify official WinGet packages without installing
         shell: pwsh
         run: |

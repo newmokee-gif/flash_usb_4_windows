@@ -346,8 +346,9 @@ def find_aria2():
         candidates.append(Path(executable))
     if sys.platform == "win32":
         arm = windows_arm64()
-        folder = "win_usb_tools_arm64" if arm else "win_usb_tools"
-        candidates.append(Path(tempfile.gettempdir(), folder, "aria2c.exe"))
+        # Only discover an explicitly installed native client here. The legacy
+        # TEMP/win_usb_tools* cache has no provenance guarantee: a PE machine
+        # header alone must never bypass the pinned bootstrap verification.
         expected = 0xAA64 if arm else 0x8664
         for candidate in candidates:
             try:

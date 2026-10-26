@@ -73,7 +73,8 @@ int main(int argc, char **argv) {
     DASessionScheduleWithRunLoop(session, loop, kCFRunLoopDefaultMode);
     DARegisterDiskMountApprovalCallback(session, NULL, approve_mount, &state);
     DADiskClaim(disk, kDADiskClaimOptionDefault, release_claim, &state, claimed, &state);
-    CFAbsoluteTime deadline = CFAbsoluteTimeGetCurrent() + 10;
+    CFAbsoluteTime started = CFAbsoluteTimeGetCurrent();
+    CFAbsoluteTime deadline = started + 30;
     SInt32 last_result = 0;
     unsigned iterations = 0;
     while (!state.done && CFAbsoluteTimeGetCurrent() < deadline) {
@@ -83,8 +84,9 @@ int main(int argc, char **argv) {
             break;
         }
     }
-    printf("Native claim probe: done=%d claimed=%d status=0x%08x runloop=%d iterations=%u\n",
-           state.done, state.claimed, (uint32_t)state.status, (int)last_result, iterations);
+    printf("Native claim probe: done=%d claimed=%d status=0x%08x runloop=%d iterations=%u elapsed=%.3fs\n",
+           state.done, state.claimed, (uint32_t)state.status, (int)last_result, iterations,
+           CFAbsoluteTimeGetCurrent() - started);
     if (state.claimed) {
         DADiskUnclaim(disk);
     }

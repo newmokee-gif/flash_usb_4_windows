@@ -171,6 +171,19 @@ class WriteWorkflowTests(unittest.TestCase):
         with patch.object(self.target, "write", side_effect=changed), self.assertRaisesRegex(raw.USBError, "Source image changed"):
             self.write()
 
+    def test_source_mutation_detected_even_when_open_handle_metadata_is_cached(self):
+        write = self.target.write
+        def changed(data):
+            self.image.write_bytes(b"z" * len(self.data))
+            return write(data)
+        with patch.object(raw, "_source_state", return_value=("unchanged cached metadata",)), \
+                patch.object(self.target, "write", side_effect=changed), \
+                self.assertRaisesRegex(raw.USBError, "post-write SHA-256 mismatch"):
+            self.write()
+        # The target still has only the originally approved bytes, never the
+        # modified source contents. Final validation must nevertheless fail.
+        self.assertEqual(self.target.getvalue()[:len(self.data)], self.data)
+
 
 class WindowsHandleOrderingTests(unittest.TestCase):
     def test_failed_volume_lock_never_opens_physical_disk(self):
@@ -254,6 +267,17 @@ class MacClaimTests(unittest.TestCase):
         claim.da.DADiskUnclaim.assert_not_called()
         claim.da.DAUnregisterCallback.assert_called_once()
         claim.da.DASessionUnscheduleFromRunLoop.assert_called_once()
+        self.assertIsNone(claim.session)
+
+    def test_timeout_stays_bounded_and_never_implies_a_claim(self):
+        claim = self.claim()
+        claim.cf.CFRunLoopRunInMode.return_value = 3
+        with patch.object(raw.time, "monotonic", side_effect=[100, 100, 131, 131]):
+            with self.assertRaisesRegex(raw.USBError, r"elapsed=31\.000s"):
+                claim.__enter__()
+        self.assertFalse(claim.claimed)
+        claim.da.DADiskUnclaim.assert_not_called()
+        claim.da.DAUnregisterCallback.assert_called_once()
         self.assertIsNone(claim.session)
 
     def test_native_dissenter_status_reported_and_never_enters(self):

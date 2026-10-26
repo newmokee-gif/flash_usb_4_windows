@@ -66,8 +66,8 @@ jobs:
             wimlib-imagex split "$fixture/fixture.wim" "$fixture/install.swm" 1 --check
             wimlib-imagex verify "$fixture/install.swm" "--ref=$fixture/install*.swm"
             python tests/smoke_macos_images.py --wim "$fixture/fixture.wim"
-            sudo "$(command -v python)" tests/smoke_raw_macos.py
             python packaging/macos/build.py --arch "$MACOS_ARCH" --output macos-dist
+            sudo "$(command -v python)" tests/smoke_raw_macos.py
           ) 2>&1 | tee macos-check.log
           result=${PIPESTATUS[0]}
           set -e
