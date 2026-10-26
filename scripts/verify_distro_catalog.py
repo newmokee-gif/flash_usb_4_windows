@@ -4,10 +4,39 @@ import json
 from pathlib import Path
 import sys
 import urllib.request
+from urllib.parse import urljoin
+from html.parser import HTMLParser
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "прога"))
-from distro_catalog import CATALOG, resolve_image
+from distro_catalog import CATALOG, resolve_image, metadata_diagnostics
 from image_download import fetch
+
+
+class Links(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.values = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self.values.extend(v for k, v in attrs if k == "href" and v)
+
+
+def failure_directory(entry):
+    directory = entry.image_url if entry.image_url.endswith("/") else urljoin(entry.image_url, ".")
+    report = []
+    for _ in range(2):
+        try:
+            data = fetch(directory, limit=4*1024*1024).decode("utf-8", errors="replace")
+            parser = Links()
+            parser.feed(data)
+            links = [v for v in parser.values if any(key in v.lower() for key in ("sha", "sum", "iso", "live", "devuan", "current", "user"))]
+            report.append({"directory": directory, "links": (links or parser.values)[:30]})
+            break
+        except Exception as error:
+            report.append({"directory": directory, "error": str(error)})
+            directory = urljoin(directory, "../")
+    return report
 
 
 def validate(entry):
@@ -29,8 +58,9 @@ def validate(entry):
             except Exception as error:
                 result["torrent"] = "HTTPS fallback: " + str(error)
     except Exception as error:
-        result.update(status="error", error=str(error))
-        message = (entry.id + ": " + str(error)).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        result.update(status="error", error=str(error), metadata=metadata_diagnostics(), directory=failure_directory(entry))
+        diagnostic = entry.id + ": " + str(error) + "\n" + json.dumps({"metadata": result["metadata"], "directory": result["directory"]}, ensure_ascii=False)
+        message = diagnostic.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
         print("::error::" + message, flush=True)
     print(json.dumps(result, ensure_ascii=False), flush=True)
     return result

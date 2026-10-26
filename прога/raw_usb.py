@@ -205,6 +205,7 @@ class _MacClaim:
             "DADiskCreateFromBSDName": ([void, void, c.c_char_p], void),
             "DADiskCopyWholeDisk": ([void], void), "DADiskGetBSDName": ([void], c.c_char_p),
             "DADissenterCreate": ([void, c.c_int32, void], void),
+            "DADissenterGetStatus": ([void], c.c_int32),
             "DASessionScheduleWithRunLoop": ([void, void, void], None),
             "DASessionUnscheduleFromRunLoop": ([void, void, void], None),
             "DARegisterDiskMountApprovalCallback": ([void, void, void, void], None),
@@ -223,6 +224,7 @@ class _MacClaim:
         self.loop = self.cf.CFRunLoopGetCurrent()
         self.session = self.disk = None
         self.claimed = self.done = self.registered = self.scheduled = False
+        self.claim_status = None
         self.approval = c.CFUNCTYPE(void, void, void)(self._approve)
         self.release = c.CFUNCTYPE(void, void, void)(lambda disk, ctx: self._deny())
         self.callback = c.CFUNCTYPE(None, void, void, void)(self._claimed)
@@ -245,6 +247,7 @@ class _MacClaim:
 
     def _claimed(self, disk, dissenter, context):
         self.claimed = not bool(dissenter)
+        self.claim_status = (self.da.DADissenterGetStatus(dissenter) & 0xFFFFFFFF) if dissenter else 0
         self.done = True
 
     def pump(self):
@@ -264,7 +267,12 @@ class _MacClaim:
             deadline = time.monotonic() + 10
             while not self.done and time.monotonic() < deadline:
                 self.cf.CFRunLoopRunInMode(self.mode, 0.05, False)
-            _require(self.done and self.claimed, "DiskArbitration refused or timed out claiming the USB")
+            _require(self.done, "DiskArbitration claim timed out without invoking its completion callback")
+            statuses = {0xF8DA0002: "busy", 0xF8DA0004: "exclusive access held by another client",
+                        0xF8DA0006: "disk not found", 0xF8DA0008: "claim release not permitted",
+                        0xF8DA0009: "not privileged", 0xF8DA000A: "disk not ready"}
+            _require(self.claimed, f"DiskArbitration refused claim: status={self.claim_status:#010x} "
+                     f"({statuses.get(self.claim_status, 'unrecognized dissenter')})")
             return self
         except Exception:
             self.__exit__(None, None, None)

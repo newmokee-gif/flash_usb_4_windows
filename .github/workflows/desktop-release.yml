@@ -9,6 +9,9 @@ on:
       - tests/**
       - scripts/publish_multios.py
       - .github/workflows/**
+      - '!прога/distro_catalog.py'
+      - '!tests/test_distro_catalog.py'
+      - '!.github/workflows/catalog-check.yml'
 permissions:
   contents: read
 jobs:

@@ -20,6 +20,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "прога"))
 import macos_usb
 import raw_usb
 
+CAPACITY = 128 * 1024 * 1024
+
 
 def plist(*command):
     return plistlib.loads(subprocess.check_output(command))
@@ -27,7 +29,7 @@ def plist(*command):
 
 def verify_private_virtual_disk(image, device):
     info = plist("/usr/sbin/diskutil", "info", "-plist", device)
-    if info.get("VirtualOrPhysical") != "Virtual" or info.get("TotalSize") != image.stat().st_size:
+    if info.get("VirtualOrPhysical") != "Virtual" or info.get("TotalSize") != CAPACITY:
         raise RuntimeError("Generated target is not the expected virtual disk")
     matches = []
     for attached in plist("/usr/bin/hdiutil", "info", "-plist").get("images", []):
@@ -48,9 +50,12 @@ def verify_private_virtual_disk(image, device):
 
 
 def exercise(image, read_only):
+    mount = image.parent / ("readonly-mount" if read_only else "writable-mount")
+    mount.mkdir()
+    # Normal attachment lets DiskArbitration observe a recognizable filesystem.
+    # -nomount may leave a raw/unrecognized image claimed by DiskImages itself.
     attached = plist("/usr/bin/hdiutil", "attach", "-readonly" if read_only else "-readwrite",
-                     "-nomount", "-nobrowse", "-noautoopen", "-imagekey",
-                     "diskimage-class=CRawDiskImage", "-plist", str(image))
+                     "-nobrowse", "-noautoopen", "-mountpoint", str(mount), "-plist", str(image))
     entities = attached.get("system-entities", [])
     devices = {item.get("dev-entry", "") for item in entities
                if re.fullmatch(r"/dev/disk\d+", item.get("dev-entry", ""))}
@@ -58,9 +63,19 @@ def exercise(image, read_only):
         raise RuntimeError("Cannot safely identify generated image attachment; retain fixture")
     device = devices.pop()
     try:
-        if any(item.get("mount-point") for item in entities):
-            raise RuntimeError("Raw fixture must remain unmounted")
         sector = verify_private_virtual_disk(image, device)
+        subprocess.run(["/usr/sbin/diskutil", "unmountDisk", device], check=True)
+        if mount.is_mount():
+            raise RuntimeError("Private virtual fixture is still mounted")
+        topology = plist("/usr/sbin/diskutil", "list", "-plist", device)
+        for identifier in topology.get("AllDisks", []):
+            if not re.fullmatch(r"disk\d+(?:s\d+)*", identifier):
+                raise RuntimeError("Invalid virtual partition identifier")
+            if plist("/usr/sbin/diskutil", "info", "-plist", "/dev/" + identifier).get("MountPoint"):
+                raise RuntimeError("Virtual fixture partition is still mounted")
+        with open(device, "rb", buffering=0) as source:
+            first_sector = source.read(sector)
+        print(f"Claiming {'readonly' if read_only else 'writable'} unmounted FAT32 virtual image", flush=True)
         with raw_usb._MacClaim(device) as claim:
             claim.pump()
             flags = (os.O_RDONLY if read_only else os.O_RDWR) | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -73,8 +88,8 @@ def exercise(image, read_only):
                 fcntl.fcntl(descriptor, 48, 1)  # F_NOCACHE, also used in production.
                 disk = raw_usb._PosixDisk(descriptor, sector, pump=claim.pump)
                 if read_only:
-                    if disk.read(sector) != bytes(sector):
-                        raise RuntimeError("New readonly raw fixture is not empty")
+                    if disk.read(sector) != first_sector:
+                        raise RuntimeError("Readonly raw fixture data changed")
                 else:
                     payload = bytes(range(256)) * (sector // 256) * 8
                     if disk.write(payload) != len(payload):
@@ -94,10 +109,12 @@ def main():
     if sys.platform != "darwin" or os.geteuid() != 0:
         raise RuntimeError("Run with native macOS Python and sudo")
     work = Path(tempfile.mkdtemp(prefix="winusb-raw-virtual-smoke-"))
-    image = work / "fixture.img"
-    # Sparse regular file created exclusively by this test, not an existing disk.
-    with image.open("xb") as stream:
-        stream.truncate(64 * 1024 * 1024)
+    image = work / "fixture.dmg"
+    # The filesystem is created inside a new private regular image file only.
+    subprocess.run(["/usr/bin/hdiutil", "create", "-size", "128m", "-layout", "MBRSPUD",
+                    "-fs", "FAT32", "-volname", "WINUSBRAW", "-format", "UDRW", str(image)], check=True)
+    if not image.is_file() or image.is_symlink():
+        raise RuntimeError("Generated fixture is not a regular file")
     try:
         exercise(image, read_only=True)
         exercise(image, read_only=False)

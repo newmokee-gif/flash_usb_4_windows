@@ -1,0 +1,26 @@
+name: Official distribution catalogue
+on:
+  push:
+    branches: [linux-support]
+    paths:
+      - прога/distro_catalog.py
+      - scripts/verify_distro_catalog.py
+      - tests/test_distro_catalog.py
+      - .github/workflows/catalog-check.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m unittest discover -s tests -p test_distro_catalog.py -v
+      - run: python scripts/verify_distro_catalog.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: official-catalogue-report
+          path: distro-catalog-validation.json
