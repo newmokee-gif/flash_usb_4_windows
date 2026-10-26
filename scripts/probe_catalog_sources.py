@@ -35,11 +35,9 @@ PREVIOUS_URLS = {
     "archcraft": "https://sourceforge.net/projects/archcraft/files/v26.08/",
 }
 URLS = {
-    "puppy": "https://distro.ibiblio.org/puppylinux/puppy-bookwormpup/BookwormPup64/10.0.12/",
-    "gparted": "https://sourceforge.net/projects/gparted/files/gparted-live-stable/",
-    "clonezilla": "https://sourceforge.net/projects/clonezilla/files/clonezilla_live_stable/",
-    "mx-torrents": "https://sourceforge.net/projects/mx-linux/files/Final/Torrents/",
-    "oracle-arm": "https://linux.oracle.com/security/gpg/checksum/OracleLinux-R9-U8-Server-aarch64.checksum",
+    "puppy": "https://distro.ibiblio.org/puppylinux/puppy-bookwormpup/BookwormPup64/10.0.12/BookwormPup64_10.0.12.iso-checksum.txt",
+    "clonezilla": "https://sourceforge.net/projects/clonezilla/files/clonezilla_live_stable/3.3.3-37/",
+    "mx-torrents": "https://mxlinux.org/torrent-files/",
 }
 
 class Links(HTMLParser):
