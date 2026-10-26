@@ -1,0 +1,60 @@
+name: Linux checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: Debian
+            image: debian:stable-slim
+            install: >-
+              apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends
+              python3 python3-tk dosfstools parted wimtools util-linux udev xvfb
+          - distro: Fedora
+            image: fedora:latest
+            install: >-
+              dnf install -y python3 python3-tkinter dosfstools parted wimlib-utils
+              util-linux systemd-udev xorg-x11-server-Xvfb
+          - distro: Arch
+            image: archlinux:latest
+            install: >-
+              pacman -Syu --noconfirm python tk dosfstools parted wimlib util-linux
+              systemd xorg-server-xvfb
+    name: ${{ matrix.distro }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencies, unit tests and graphical startup
+        env:
+          IMAGE: ${{ matrix.image }}
+          INSTALL: ${{ matrix.install }}
+        run: |
+          docker run --rm -v "$PWD:/src:ro" -w /src -e INSTALL "$IMAGE" sh -eu -c '
+            sh -eu -c "$INSTALL"
+            cat /etc/os-release
+            python3 --version
+            python3 прога/linux_usb.py check
+            PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+            mkdir /tmp/wim-fixture
+            for part in a b c; do
+              dd if=/dev/urandom of=/tmp/wim-fixture/$part bs=1M count=1 status=none
+            done
+            wimlib-imagex capture /tmp/wim-fixture /tmp/fixture.wim --compress=none --check
+            wimlib-imagex split /tmp/fixture.wim /tmp/install.swm 1 --check
+            wimlib-imagex verify /tmp/install.swm --ref=/tmp/install\*.swm
+            Xvfb :99 -screen 0 1024x768x24 &
+            xvfb_pid=$!
+            trap "kill $xvfb_pid" EXIT
+            export DISPLAY=:99 PYTHONDONTWRITEBYTECODE=1
+            python3 -c "import sys, time, tkinter; sys.path.insert(0, \"прога\"); from linux_gui import LinuxUSB; time.sleep(1); root = tkinter.Tk(); app = LinuxUSB(root); root.update(); root.destroy()"
+          '

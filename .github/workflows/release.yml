@@ -1,0 +1,36 @@
+name: Linux release
+on:
+  push:
+    tags: ['v*-linux*']
+permissions:
+  contents: write
+jobs:
+  distro-checks:
+    uses: ./.github/workflows/linux.yml
+  release:
+    needs: distro-checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Test
+        run: python -m unittest discover -s tests -v
+      - name: Build source distribution
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="flash-usb-${GITHUB_REF_NAME}"
+          mkdir -p "release/$name/прога"
+          cp flash_usb.py README.md LICENSE "release/$name/"
+          cp прога/linux_usb.py прога/linux_gui.py "release/$name/прога/"
+          cp -r tests "release/$name/"
+          find "release/$name" -type d -name __pycache__ -prune -exec rm -r {} +
+          tar -C release -czf "${name}.tar.gz" "$name"
+          sha256sum "${name}.tar.gz" > "${name}.tar.gz.sha256"
+      - name: Publish prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "flash-usb-${GITHUB_REF_NAME}.tar.gz" "flash-usb-${GITHUB_REF_NAME}.tar.gz.sha256" --verify-tag --prerelease --title "Linux support ${GITHUB_REF_NAME}" --notes "Linux UEFI USB creation for Debian, Fedora and Arch. Includes Tkinter UI, CLI, disk safety checks and file verification. Install distro dependencies as documented in README. Automated tests run before publishing. Physical USB writing/boot and Windows regression have not been validated; this is a prerelease, not a guarantee of bug-free operation."
