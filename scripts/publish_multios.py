@@ -7,12 +7,12 @@ import subprocess
 from consolidate_release import GitHub, require, sha256, verify_manifest, verify_new_release
 
 
-TAG = "v0.3.1"
+TAG = "v0.3.2"
 EXPECTED = {
     "WinUSB-Creator-Windows-x64.exe", "WinUSB-Creator-Windows-ARM64.exe",
     "WinUSB-Creator-macOS-Intel.dmg", "WinUSB-Creator-macOS-AppleSilicon.dmg",
-    "flash-usb-v0.3.1-x86_64.AppImage", "flash-usb-v0.3.1-aarch64.AppImage",
-    "flash-usb_0.3.1_all.deb", "flash-usb-0.3.1-1.noarch.rpm",
+    "flash-usb-v0.3.2-x86_64.AppImage", "flash-usb-v0.3.2-aarch64.AppImage",
+    "flash-usb_0.3.2_all.deb", "flash-usb-0.3.2-1.noarch.rpm",
 }
 DESKTOP_MANIFESTS = {
     "SHA256SUMS-Windows-x64.txt": "WinUSB-Creator-Windows-x64.exe",
@@ -61,12 +61,12 @@ def main():
     releases = gh.list_releases()
     require(not any(r["tag_name"] == TAG for r in releases), "Destination already exists")
     public = [r for r in releases if not r["draft"]]
-    require(len(public) == 1 and public[0]["tag_name"] == "v0.3.0", "Unexpected public releases")
+    require(len(public) == 1 and public[0]["tag_name"] == "v0.3.1", "Unexpected public releases")
     old = public[0]
     require(not old.get("immutable"), "Previous release is immutable")
     builds = root / "desktop-dist"
     verified_hashes = validate_inputs(builds)
-    output = root / "release-v0.3.1"
+    output = root / "release-v0.3.2"
     output.mkdir()
     for p in builds.iterdir():
         require(p.is_file() and not p.is_symlink(), "Unsafe artifact")
@@ -79,12 +79,12 @@ def main():
                   "previous_release": {"id": old["id"], "tag": old["tag_name"]}}
     (output / "RELEASE-PROVENANCE.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
     (output / "SHA256SUMS.txt").write_text("".join(f"{sha256(p)}  {p.name}\n" for p in sorted(output.iterdir())), encoding="utf-8")
-    notes = (root / "docs/releases/v0.3.1.md").read_text(encoding="utf-8")
+    notes = (root / "docs/releases/v0.3.2.md").read_text(encoding="utf-8")
     new = gh.api("releases", "POST", {"tag_name": TAG, "target_commitish": commit,
-        "name": "WinUSB Creator 0.3.1 — Windows и ГНУ/Линукс", "body": notes,
+        "name": "WinUSB Creator 0.3.2 — Windows и ГНУ/Линукс", "body": notes,
         "draft": True, "prerelease": False})
     gh.upload(TAG, sorted(output.iterdir()))
-    verify_new_release(gh, new["id"], TAG, output, root / "verify-v0.3.1")
+    verify_new_release(gh, new["id"], TAG, output, root / "verify-v0.3.2")
     gh.edit(new["id"], draft=False, prerelease=False, make_latest="true")
     require(gh.api("releases/latest")["id"] == new["id"], "Publication is not Latest")
     gh.edit(old["id"], draft=True)

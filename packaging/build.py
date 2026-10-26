@@ -17,8 +17,8 @@ import tarfile
 import tempfile
 
 
-DEB_VERSION = "0.3.1"
-RPM_VERSION = "0.3.1"
+DEB_VERSION = "0.3.2"
+RPM_VERSION = "0.3.2"
 RPM_RELEASE = "1"
 
 

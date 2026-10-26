@@ -2,7 +2,7 @@ name: Windows and GNU Linux all-platform release
 on:
   push:
     branches: [linux-support]
-    tags: [v0.3.1]
+    tags: [v0.3.2]
     paths:
       - прога/**
       - packaging/**
@@ -127,7 +127,7 @@ jobs:
           path: desktop-dist/*
           if-no-files-found: error
   publish:
-    if: github.ref == 'refs/tags/v0.3.1'
+    if: github.ref == 'refs/tags/v0.3.2'
     needs: [catalog, linux, macos, windows, packages, appimage, linux-arm]
     runs-on: ubuntu-latest
     permissions:

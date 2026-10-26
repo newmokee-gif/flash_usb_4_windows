@@ -67,15 +67,15 @@ class InputValidationTests(unittest.TestCase):
             publish.validate_inputs(self.builds)
 
     def test_empty_linux_payload_is_rejected(self):
-        (self.builds / "flash-usb_0.3.1_all.deb").write_bytes(b"")
+        (self.builds / "flash-usb_0.3.2_all.deb").write_bytes(b"")
         with self.assertRaisesRegex(ReleaseError, "empty artifact"):
             publish.validate_inputs(self.builds)
 
     def test_symlink_payload_is_rejected(self):
-        path = self.builds / "flash-usb_0.3.1_all.deb"
+        path = self.builds / "flash-usb_0.3.2_all.deb"
         path.unlink()
         try:
-            path.symlink_to(self.builds / "flash-usb-0.3.1-1.noarch.rpm")
+            path.symlink_to(self.builds / "flash-usb-0.3.2-1.noarch.rpm")
         except OSError:
             self.skipTest("symlink creation not available")
         with self.assertRaisesRegex(ReleaseError, "Unsafe"):
@@ -86,7 +86,7 @@ class InputValidationTests(unittest.TestCase):
         staged = self.root / "staged"
         shutil.copytree(self.builds, staged)
         publish.verify_staged(staged, verified)
-        (staged / "flash-usb-v0.3.1-aarch64.AppImage").write_bytes(b"corrupted")
+        (staged / "flash-usb-v0.3.2-aarch64.AppImage").write_bytes(b"corrupted")
         with self.assertRaisesRegex(ReleaseError, "Staged artifact differs"):
             publish.verify_staged(staged, verified)
 
@@ -95,7 +95,7 @@ class InputValidationTests(unittest.TestCase):
         gh = Mock()
         commit = "a" * 40
         gh.api.return_value = {"object": {"type": "commit", "sha": commit}}
-        gh.list_releases.return_value = [{"tag_name": "v0.3.0", "draft": False, "immutable": False}]
+        gh.list_releases.return_value = [{"tag_name": "v0.3.1", "draft": False, "immutable": False}]
         with patch.object(publish.Path, "cwd", return_value=self.root), \
                 patch.object(publish.subprocess, "check_output", return_value=commit + "\n"), \
                 patch.object(publish, "GitHub", return_value=gh), \

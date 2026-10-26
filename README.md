@@ -12,14 +12,14 @@
 | Windows 11 ARM64 | `WinUSB-Creator-Windows-ARM64.exe` |
 | macOS 15+ Apple Silicon | `WinUSB-Creator-macOS-AppleSilicon.dmg` |
 | macOS 15+ Intel | `WinUSB-Creator-macOS-Intel.dmg` |
-| Debian x64/ARM64 | `flash-usb_0.3.1_all.deb` |
-| Fedora x64/ARM64 | `flash-usb-0.3.1-1.noarch.rpm` |
-| Debian/Fedora/Arch x64 | `flash-usb-v0.3.1-x86_64.AppImage` |
-| Debian/Fedora ARM64 | `flash-usb-v0.3.1-aarch64.AppImage` |
+| Debian x64/ARM64 | `flash-usb_0.3.2_all.deb` |
+| Fedora x64/ARM64 | `flash-usb-0.3.2-1.noarch.rpm` |
+| Debian/Fedora/Arch x64 | `flash-usb-v0.3.2-x86_64.AppImage` |
+| Debian/Fedora ARM64 | `flash-usb-v0.3.2-aarch64.AppImage` |
 
 Windows EXE автономный: отдельная папка `_internal` не нужна. Откройте DMG на Mac и перетащите приложение в «Программы». В AppImage включены Python/Tk; нужны glibc 2.36+ и графическая сессия. Выдайте файлу право запуска; если FUSE недоступен, используйте `--appimage-extract-and-run`.
 
-DEB/RPM устанавливаются через `sudo apt install ./flash-usb_0.3.1_all.deb` или `sudo dnf install ./flash-usb-0.3.1-1.noarch.rpm`. Менеджер установит зависимости, включая aria2. Эти пакеты используют системный Python.
+DEB/RPM устанавливаются через `sudo apt install ./flash-usb_0.3.2_all.deb` или `sudo dnf install ./flash-usb-0.3.2-1.noarch.rpm`. Менеджер установит зависимости, включая aria2. Эти пакеты используют системный Python.
 
 Контрольные суммы файлов — в `SHA256SUMS.txt`, сведения о сборке — в `RELEASE-PROVENANCE.json`. Исходники доступны по тегу релиза. GitHub сам добавляет ссылки Source code ZIP/tar.gz; скачивать их для запуска приложения не нужно.
 
@@ -35,7 +35,7 @@ Linux/macOS-версии Windows-режима работают с локальн
 
 Выберите дистрибутив и доступную редакцию/архитектуру, затем скачайте образ. Каталог и официальные источники описаны в [docs/distro-sources.md](docs/distro-sources.md). ARM64 предлагается только для реально существующих установочных образов; поддержка платы или прошивки зависит от самого дистрибутива.
 
-В текущих исходниках каталог расширен до **60 дистрибутивов и 77 вариантов образов**, включая 17 ARM64. Добавлены 30 разных систем, в том числе EndeavourOS, Artix, Garuda, MX Linux, Parrot OS, Solus, Tails, Puppy Linux, Rescuezilla и SystemRescue. Это расширение пока не входит в готовые приложения релиза v0.3.1.
+Начиная с версии **0.3.2**, каталог содержит **60 дистрибутивов и 77 вариантов образов**, включая 17 ARM64. Добавлены 30 разных систем, в том числе EndeavourOS, Artix, Garuda, MX Linux, Parrot OS, Solus, Tails, Puppy Linux, Rescuezilla и SystemRescue.
 
 Если есть официальный torrent, используется BitTorrent. В DMG и AppImage включён aria2, DEB/RPM устанавливают его как зависимость. В Windows Linux-режим при необходимости скачивает официальный aria2 с GitHub и проверяет закреплённые SHA-256 архива и EXE. На Windows 11 ARM64 при отсутствии нативного клиента отдельно запрашивается согласие на x64-помощник через эмуляцию ОС; само приложение остаётся нативным ARM64. При отсутствии торрента или ошибке загрузки программа сообщает о переходе на официальный HTTPS-сервер. Контрольная сумма из официального источника проверяется до разрешения записи. Для локального ISO/IMG укажите опубликованную разработчиком SHA-256.
 
