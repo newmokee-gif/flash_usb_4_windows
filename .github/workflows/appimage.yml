@@ -35,7 +35,7 @@ jobs:
           result=${PIPESTATUS[0]}
           set -e
           if [ "$result" -ne 0 ]; then
-            python3 -c 'from pathlib import Path; t="\n".join(Path("appimage-build.log").read_text(errors="replace").splitlines()[-70:]); print("::error::" + t.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
+            python3 -c 'from pathlib import Path; t=Path("appimage-build.log").read_text(errors="replace")[-3000:]; print("::error::" + t.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
           fi
           exit "$result"
       - uses: actions/upload-artifact@v4
@@ -53,17 +53,20 @@ jobs:
         include:
           - distro: Debian 12
             image: debian:bookworm-slim
+            require_no_python: '1'
             install: >-
               apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends
               xvfb fonts-dejavu-core util-linux mount parted dosfstools wimtools udev pkexec
               libxft2 libxrender1 libxss1
           - distro: Fedora
             image: fedora:latest
+            require_no_python: '0'
             install: >-
               dnf install -y xorg-x11-server-Xvfb dejavu-sans-fonts util-linux parted dosfstools
               wimlib-utils systemd-udev polkit libXft libXrender libXScrnSaver
           - distro: Arch
             image: archlinux:latest
+            require_no_python: '0'
             install: >-
               pacman -Syu --noconfirm xorg-server-xvfb ttf-dejavu util-linux parted dosfstools
               wimlib systemd polkit libxft libxrender libxss
@@ -77,13 +80,18 @@ jobs:
         env:
           IMAGE: ${{ matrix.image }}
           INSTALL: ${{ matrix.install }}
+          REQUIRE_NO_PYTHON: ${{ matrix.require_no_python }}
         run: |
           chmod 755 appimage/*.AppImage
           set +e
-          docker run --rm -v "$PWD/appimage:/app:ro" -e INSTALL "$IMAGE" sh -eu -c '
+          docker run --rm -v "$PWD/appimage:/app:ro" -e INSTALL -e REQUIRE_NO_PYTHON "$IMAGE" sh -eu -c '
             sh -eu -c "$INSTALL"
             cat /etc/os-release
             if command -v python3; then
+              if [ "$REQUIRE_NO_PYTHON" = 1 ]; then
+                echo "Python-free runtime test unexpectedly has host Python"
+                exit 1
+              fi
               echo "Host Python present (not used by AppImage)"
             else
               echo "No host Python installed"
@@ -101,7 +109,7 @@ jobs:
           result=${PIPESTATUS[0]}
           set -e
           if [ "$result" -ne 0 ]; then
-            python3 -c 'from pathlib import Path; t="\n".join(Path("appimage-test.log").read_text(errors="replace").splitlines()[-70:]); print("::error::" + t.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
+            python3 -c 'from pathlib import Path; t=Path("appimage-test.log").read_text(errors="replace")[-3000:]; print("::error::" + t.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
           fi
           exit "$result"
 
