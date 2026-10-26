@@ -24,7 +24,8 @@ jobs:
           name="flash-usb-${GITHUB_REF_NAME}"
           mkdir -p "release/$name/прога"
           cp flash_usb.py README.md LICENSE "release/$name/"
-          cp прога/linux_usb.py прога/linux_gui.py "release/$name/прога/"
+          cp прога/*.py "release/$name/прога/"
+          cp -r packaging "release/$name/"
           cp -r tests "release/$name/"
           find "release/$name" -type d -name __pycache__ -prune -exec rm -r {} +
           tar -C release -czf "${name}.tar.gz" "$name"
