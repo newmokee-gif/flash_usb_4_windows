@@ -39,6 +39,7 @@ jobs:
           IMAGE: ${{ matrix.image }}
           INSTALL: ${{ matrix.install }}
         run: |
+          set +e
           docker run --rm -v "$PWD:/src:ro" -w /src -e INSTALL "$IMAGE" sh -eu -c '
             sh -eu -c "$INSTALL"
             cat /etc/os-release
@@ -57,4 +58,10 @@ jobs:
             trap "kill $xvfb_pid" EXIT
             export DISPLAY=:99 PYTHONDONTWRITEBYTECODE=1
             python3 -c "import sys, time, tkinter; sys.path.insert(0, \"прога\"); from linux_gui import LinuxUSB; time.sleep(1); root = tkinter.Tk(); app = LinuxUSB(root); root.update(); root.destroy()"
-          '
+          ' 2>&1 | tee distro-check.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python3 -c 'from pathlib import Path; text="\n".join(Path("distro-check.log").read_text(errors="replace").splitlines()[-60:]); print("::error::" + text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
+          fi
+          exit "$result"
