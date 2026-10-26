@@ -283,6 +283,30 @@ class MacRegistryAndRootTests(unittest.TestCase):
             mac._root_disks(root, {"Containers": []})
 
 
+class MacDiscoveryTests(unittest.TestCase):
+    def snapshot(self, whole_info):
+        topology = {"AllDisksAndPartitions": [{"DeviceIdentifier": "disk2", "Partitions": [
+            {"DeviceIdentifier": "disk2s1", "Content": "Microsoft Basic Data"}]}]}
+        root = {"DeviceIdentifier": "disk0s2", "ParentWholeDisk": "disk0"}
+        def info(path):
+            return {"/": root, "/dev/disk2": whole_info, "/dev/disk2s1": native_partition_info()}[path]
+        with mock.patch.object(mac, "_plist", side_effect=[topology, {"Containers": []}, [media()]]), \
+             mock.patch.object(mac, "_info", side_effect=info):
+            return mac._snapshot()
+
+    def test_native_whole_disk_discovery_accepts_valid_usb(self):
+        devices = self.snapshot(native_disk_info())
+        self.assertEqual(len(devices), 1)
+        self.assertTrue(devices[0].safe)
+
+    def test_internal_whole_disk_is_hidden_not_a_partition_error(self):
+        self.assertEqual(self.snapshot(native_disk_info(Internal=True)), [])
+
+    def test_wrong_whole_disk_identity_is_rejected(self):
+        with self.assertRaises(mac.USBError):
+            self.snapshot(native_disk_info(DeviceIdentifier="disk0"))
+
+
 class MacMountValidationTests(unittest.TestCase):
     def setUp(self):
         temporary = tempfile.TemporaryDirectory()
@@ -326,7 +350,8 @@ class MacMountValidationTests(unittest.TestCase):
     def test_formatted_partition_layout_rejects_extra_or_wrong_partition(self):
         valid = {"AllDisksAndPartitions": [{"DeviceIdentifier": "disk2", "Content": "FDisk_partition_scheme",
                  "Partitions": [{"DeviceIdentifier": "disk2s1", "Content": "DOS_FAT_32"}]}]}
-        info = {"FilesystemType": "msdos", "FilesystemName": "MS-DOS FAT32", "VolumeName": "WINUSB"}
+        info = {"FilesystemType": "msdos", "FilesystemName": "MS-DOS FAT32", "VolumeName": "WINUSB",
+                "WholeDisk": False, "ParentWholeDisk": "disk2"}
         with mock.patch.object(mac, "_plist", return_value=valid), mock.patch.object(mac, "_info", return_value=info):
             self.assertEqual(mac._new_partition("/dev/disk2"), "/dev/disk2s1")
         extra = copy.deepcopy(valid)
@@ -344,7 +369,8 @@ class MacMountValidationTests(unittest.TestCase):
     def test_formatted_partition_requires_expected_volume_label(self):
         response = {"AllDisksAndPartitions": [{"DeviceIdentifier": "disk2", "Content": "FDisk_partition_scheme",
                     "Partitions": [{"DeviceIdentifier": "disk2s1", "Content": "DOS_FAT_32"}]}]}
-        info = {"FilesystemType": "msdos", "FilesystemName": "MS-DOS FAT32", "VolumeName": "CHANGED"}
+        info = {"FilesystemType": "msdos", "FilesystemName": "MS-DOS FAT32", "VolumeName": "CHANGED",
+                "WholeDisk": False, "ParentWholeDisk": "disk2"}
         with mock.patch.object(mac, "_plist", return_value=response), mock.patch.object(mac, "_info", return_value=info):
             with self.assertRaisesRegex(mac.USBError, "label"):
                 mac._new_partition("/dev/disk2")

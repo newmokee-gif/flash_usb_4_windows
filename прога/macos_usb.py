@@ -268,9 +268,8 @@ def _snapshot():
         if _whole(name) != name:
             raise USBError("Expected whole physical disk")
         info = _info("/dev/" + name)
-        if (_whole_disk(info) is not False
-                or (info.get("ParentWholeDisk") or info.get("PartOfWhole")) != Path(device).name):
-            raise ValueError("formatted partition parent could not be confirmed")
+        if _whole_disk(info) is not True or info.get("DeviceIdentifier") != name:
+            raise USBError("Whole-disk discovery returned inconsistent metadata")
         # Internal disks never appear as selectable GUI targets.
         if info.get("Internal") is True or info.get("BusProtocol") != "USB":
             continue
@@ -401,6 +400,9 @@ def _new_partition(device):
         if not re.fullmatch(re.escape(Path(device).name) + r"s\d+", name):
             raise ValueError("partition is not on the selected disk")
         info = _info("/dev/" + name)
+        if (_whole_disk(info) is not False
+                or (info.get("ParentWholeDisk") or info.get("PartOfWhole")) != Path(device).name):
+            raise ValueError("formatted partition parent could not be confirmed")
         personality = info.get("FilesystemName") or info.get("FileSystemPersonality")
         if info.get("FilesystemType") != "msdos" or personality != "MS-DOS FAT32":
             raise ValueError("diskutil did not create FAT32")
