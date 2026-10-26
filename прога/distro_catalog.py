@@ -125,12 +125,16 @@ def _metadata(url):
 def _links(base):
     parser = _Links()
     parser.feed(_metadata(base))
-    base_url = urlsplit(base)
     links = []
     for link in parser.links:
         url = urlsplit(urljoin(base, link))
-        if url.scheme == "https" and url.netloc == base_url.netloc and url.path.rsplit("/", 1)[0] == base_url.path.rstrip("/"):
-            links.append(url.path.rsplit("/", 1)[-1])
+        name = url.path.rsplit("/", 1)[-1]
+        # Mirror redirects may change both hostname and directory prefix.
+        # Only return a simple basename: callers filter it by the distro's
+        # filename pattern and fetch it through the original HTTPS publisher
+        # base. The advertised href itself is never followed here.
+        if url.scheme in ("http", "https") and re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.+-]*", name):
+            links.append(name)
     return links
 
 

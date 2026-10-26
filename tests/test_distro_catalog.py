@@ -58,10 +58,24 @@ class CatalogTests(unittest.TestCase):
             resolved = catalog.resolve_image(entry)
         self.assertEqual(resolved.sha256, "c"*64)
 
-    def test_index_links_are_normalized_and_external_links_ignored(self):
+    def test_index_links_return_only_simple_basenames(self):
         html = '<a href="./one.iso">a</a><a href="https://example.org/iso/two.iso">b</a><a href="https://other.org/iso/evil.iso">c</a>'
         with patch.object(catalog, "_metadata", return_value=html):
-            self.assertEqual(catalog._links("https://example.org/iso/"), ["one.iso", "two.iso"])
+            self.assertEqual(catalog._links("https://example.org/iso/"), ["one.iso", "two.iso", "evil.iso"])
+
+    def test_fedora_redirected_index_uses_original_publisher_for_manifest(self):
+        entry = next(e for e in catalog.CATALOG if e.id == "fedora-x64")
+        checksum = "Fedora-Workstation-43-1.6-x86_64-CHECKSUM"
+        filename = "Fedora-Workstation-Live-43-1.6.x86_64.iso"
+        for href in (
+            "/fedora/fedora/linux/releases/43/Workstation/x86_64/iso/" + checksum,
+            "https://mirror.example/fedora/fedora/linux/releases/43/Workstation/x86_64/iso/" + checksum,
+        ):
+            with self.subTest(href=href), patch.object(catalog, "_metadata", side_effect=[f'<a href="{href}">checksum</a>', "d"*64 + "  " + filename]) as metadata:
+                image = catalog.resolve_image(entry)
+            self.assertEqual(metadata.call_args_list[1].args[0], entry.image_url + checksum)
+            self.assertEqual(image.checksum_url, entry.image_url + checksum)
+            self.assertEqual(image.image_url, entry.image_url + filename)
 
     def test_gentoo_publisher_pointer_requires_named_sha512(self):
         entry = next(e for e in catalog.CATALOG if e.id == "gentoo")
