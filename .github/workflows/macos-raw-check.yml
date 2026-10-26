@@ -1,0 +1,29 @@
+name: Native macOS raw disk fixture
+on:
+  push:
+    branches: [linux-support]
+    paths:
+      - прога/raw_usb.py
+      - tests/smoke_raw_macos.py
+      - .github/workflows/macos-raw-check.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: x64
+      - name: Exercise claim and raw I/O only on a private virtual image
+        run: |
+          set +e
+          sudo "$(command -v python)" tests/smoke_raw_macos.py 2>&1 | tee raw-smoke.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python -c 'from pathlib import Path; t=Path("raw-smoke.log").read_text(errors="replace")[-5000:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"

@@ -12,6 +12,8 @@ on:
       - '!прога/distro_catalog.py'
       - '!tests/test_distro_catalog.py'
       - '!.github/workflows/catalog-check.yml'
+      - '!tests/smoke_raw_macos.py'
+      - '!.github/workflows/macos-raw-check.yml'
 permissions:
   contents: read
 jobs:

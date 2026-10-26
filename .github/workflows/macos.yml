@@ -43,7 +43,7 @@ jobs:
       - name: Install native build and WIM dependencies
         run: |
           test "$(uname -m)" = '${{ matrix.machine }}'
-          brew install wimlib
+          brew install wimlib aria2
           python -m pip install PyInstaller==6.22.3 certifi==2025.10.5
       - name: Tests, read-only discovery, real WIM fixture and bundle validation
         env:
@@ -104,7 +104,7 @@ jobs:
           sha256sum -c SHA256SUMS-macOS-AppleSilicon.txt
           sha256sum -c SHA256SUMS-macOS-Intel.txt
           gh release view "$release"
-          gh release upload "$release" WinUSB-Creator-macOS-AppleSilicon.zip WinUSB-Creator-macOS-Intel.zip SHA256SUMS-macOS-AppleSilicon.txt SHA256SUMS-macOS-Intel.txt
+          gh release upload "$release" WinUSB-Creator-macOS-AppleSilicon.dmg WinUSB-Creator-macOS-Intel.dmg SHA256SUMS-macOS-AppleSilicon.txt SHA256SUMS-macOS-Intel.txt
           gh release view "$release" --json body --jq .body > release-notes.md
           python3 - <<'PY'
           import os
@@ -114,9 +114,9 @@ jobs:
 
           ## macOS: Apple Silicon and Intel
 
-          macOS15+ native bundles: `WinUSB-Creator-macOS-AppleSilicon.zip` (M-series)
-          and `WinUSB-Creator-macOS-Intel.zip` (Intel Macs).
-          Extract the ZIP and move the complete `WinUSB Creator.app` to Applications.
+          macOS15+ native applications: `WinUSB-Creator-macOS-AppleSilicon.dmg` (M-series)
+          and `WinUSB-Creator-macOS-Intel.dmg` (Intel Macs).
+          Open the DMG and move the complete `WinUSB Creator.app` to Applications.
           Python/Tk are bundled; install the external image tool with `brew install wimlib`.
           The program creates Windows UEFI installation USBs for compatible target hardware.
           It does not enable native Windows USB boot on Apple Silicon.
@@ -128,7 +128,7 @@ jobs:
           Native Mach-O architecture/signature checks, GUI/CLI subprocess checks, disk-safety
           unit tests and real WIM operations passed on Apple Silicon and Intel macOS runners.
           Physical USB writing, firmware boot and interactive administrator authorization
-          have not been validated. Checksums accompany each ZIP.
+          have not been validated. Checksums accompany each DMG.
           ''' + '\nmacOS source commit: `' + os.environ['GITHUB_SHA'] + '`.\n')
           PY
           gh release edit "$release" --notes-file release-notes.md

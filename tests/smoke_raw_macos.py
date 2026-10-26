@@ -109,10 +109,10 @@ def main():
     if sys.platform != "darwin" or os.geteuid() != 0:
         raise RuntimeError("Run with native macOS Python and sudo")
     work = Path(tempfile.mkdtemp(prefix="winusb-raw-virtual-smoke-"))
-    image = work / "fixture.dmg"
+    image = work / "fixture.sparseimage"
     # The filesystem is created inside a new private regular image file only.
-    subprocess.run(["/usr/bin/hdiutil", "create", "-size", "128m", "-layout", "MBRSPUD",
-                    "-fs", "FAT32", "-volname", "WINUSBRAW", "-format", "UDRW", str(image)], check=True)
+    subprocess.run(["/usr/bin/hdiutil", "create", "-type", "SPARSE", "-size", "128m",
+                    "-layout", "MBRSPUD", "-fs", "FAT32", "-volname", "WINUSBRAW", str(image)], check=True)
     if not image.is_file() or image.is_symlink():
         raise RuntimeError("Generated fixture is not a regular file")
     try:

@@ -62,7 +62,7 @@ jobs:
           release="${GITHUB_REF_NAME#windows-arm-}"
           sha256sum -c SHA256SUMS-Windows-ARM64.txt
           gh release view "$release"
-          gh release upload "$release" WinUSB-Creator-Windows-ARM64.zip SHA256SUMS-Windows-ARM64.txt
+          gh release upload "$release" WinUSB-Creator-Windows-ARM64.exe SHA256SUMS-Windows-ARM64.txt
           gh release view "$release" --json body --jq .body > release-notes.md
           python3 - <<'PY'
           import os
@@ -72,8 +72,7 @@ jobs:
 
           ## Native Windows ARM64
 
-          Download and extract `WinUSB-Creator-Windows-ARM64.zip`, then run
-          `WinUSB-Creator-Windows-ARM64.exe`; keep `_internal` next to it.
+          Download and run `WinUSB-Creator-Windows-ARM64.exe` directly.
           Python and Tk are bundled. The executable and bundled DLL/PYD files
           are verified as native ARM64 PE files; GUI/WinAPI smoke tests ran on
           `windows-11-arm`. The application requests administrator privileges.
@@ -81,7 +80,7 @@ jobs:
           Downloads require a separately installed native ARM64 aria2c in PATH;
           local ISO writing works without aria2. No silent x64 helper download.
           ARM64 Windows is UEFI-only. Physical USB/boot and live Microsoft ISO
-          download were not tested. The ZIP is not code-signed.
+          download were not tested. The EXE is not code-signed.
           Checksums: `SHA256SUMS-Windows-ARM64.txt`.
           ''' + '\nBuild source commit: `' + os.environ['GITHUB_SHA'] + '`.\n')
           PY
