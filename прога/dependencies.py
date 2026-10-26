@@ -9,14 +9,14 @@ import sys
 def commands(system, distro="", machine=""):
     if system == "Linux":
         if distro in ("debian", "ubuntu"):
-            return [["apt-get", "update"], ["apt-get", "install", "-y", "python3", "python3-tk", "util-linux", "mount", "parted", "dosfstools", "wimtools", "udev", "pkexec", "fonts-dejavu-core"]]
+            return [["apt-get", "update"], ["apt-get", "install", "-y", "python3", "python3-tk", "util-linux", "mount", "parted", "dosfstools", "wimtools", "udev", "pkexec", "fonts-dejavu-core", "aria2", "ca-certificates"]]
         if distro == "fedora":
-            return [["dnf", "install", "-y", "python3", "python3-tkinter", "util-linux", "parted", "dosfstools", "wimlib-utils", "systemd-udev", "polkit", "dejavu-sans-fonts"]]
+            return [["dnf", "install", "-y", "python3", "python3-tkinter", "util-linux", "parted", "dosfstools", "wimlib-utils", "systemd-udev", "polkit", "dejavu-sans-fonts", "aria2", "ca-certificates"]]
         if distro == "arch":
-            return [["pacman", "-Syu", "--needed", "python", "tk", "util-linux", "parted", "dosfstools", "wimlib", "systemd", "polkit", "ttf-dejavu"]]
+            return [["pacman", "-Syu", "--needed", "python", "tk", "util-linux", "parted", "dosfstools", "wimlib", "systemd", "polkit", "ttf-dejavu", "aria2", "ca-certificates"]]
         raise RuntimeError("Поддерживаются Debian, Ubuntu, Fedora и Arch.")
     if system == "Darwin":
-        return [["brew", "install", "wimlib"]]
+        return [["brew", "install", "wimlib", "aria2"]]
     if system == "Windows":
         arch = {"arm64": "arm64", "aarch64": "arm64", "amd64": "x64", "x86_64": "x64"}.get(machine.lower())
         if not arch:

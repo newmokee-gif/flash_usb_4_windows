@@ -15,6 +15,8 @@ Requires:       wimlib-utils
 Requires:       systemd-udev
 Requires:       polkit
 Requires:       dejavu-sans-fonts
+Requires:       aria2
+Requires:       ca-certificates
 
 # Ship portable Python sources; bytecode differs between interpreter releases.
 %global __brp_python_bytecompile %{nil}

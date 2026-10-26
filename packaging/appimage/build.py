@@ -20,7 +20,7 @@ import tempfile
 import urllib.request
 
 
-VERSION = "v0.2.0-linux.2"
+VERSION = "v0.3.0"
 PYINSTALLER_VERSION = "6.22.3"
 # Binary hashes are GitHub's authoritative release-asset SHA256 digests:
 # https://github.com/AppImage/appimagetool/releases/expanded_assets/1.9.1

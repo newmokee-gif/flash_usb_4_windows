@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build native macOS15+ .app ZIP distributions with bundled Python/Tk.
+"""Build native macOS15+ application DMGs with bundled Python/Tk.
 
 Requires the matching native Python3.13, PyInstaller==6.22.3 and Xcode tools.
 The app is ad-hoc signed for integrity, not Developer ID signed/notarized.
@@ -102,19 +102,37 @@ def main():
         info = bundle / "Contents/Info.plist"
         data = plistlib.loads(info.read_bytes())
         data.update(LSMinimumSystemVersion="15.0", NSHighResolutionCapable=True,
-                    CFBundleShortVersionString="0.2.0", CFBundleVersion="0.2.0")
+                    CFBundleShortVersionString="0.3.0", CFBundleVersion="0.3.0")
         info.write_bytes(plistlib.dumps(data))
         subprocess.run(["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(bundle)], check=True)
         check_bundle(bundle, args.arch, work / "smoke-built.json")
-        filename = f"WinUSB-Creator-macOS-{ARCH_NAMES[args.arch]}.zip"
+        filename = f"WinUSB-Creator-macOS-{ARCH_NAMES[args.arch]}.dmg"
         archive = output / filename
-        subprocess.run(["/usr/bin/ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", str(bundle), str(archive)], check=True)
-        restored = work / "restored"
-        subprocess.run(["/usr/bin/ditto", "-x", "-k", str(archive), str(restored)], check=True)
-        check_bundle(restored / bundle.name, args.arch, work / "smoke-restored.json")
+        staging = work / "dmg-content"
+        staging.mkdir()
+        subprocess.run(["/usr/bin/ditto", str(bundle), str(staging / bundle.name)], check=True)
+        (staging / "Applications").symlink_to("/Applications", target_is_directory=True)
+        subprocess.run(["/usr/bin/hdiutil", "create", "-volname", "WinUSB Creator",
+                        "-srcfolder", str(staging), "-fs", "HFS+", "-format", "UDZO",
+                        str(archive)], check=True)
+        subprocess.run(["/usr/bin/hdiutil", "verify", str(archive)], check=True)
+        mount = work / "mounted-dmg"
+        mount.mkdir()
+        attached = subprocess.check_output(["/usr/bin/hdiutil", "attach", "-readonly", "-nobrowse",
+                                            "-mountpoint", str(mount), "-plist", str(archive)])
+        entities = plistlib.loads(attached).get("system-entities", [])
+        devices = [entity["dev-entry"] for entity in entities if entity.get("dev-entry")]
+        if not devices:
+            raise RuntimeError("DMG attachment returned no device for safe detachment")
+        try:
+            restored = work / "restored"
+            subprocess.run(["/usr/bin/ditto", str(mount / bundle.name), str(restored / bundle.name)], check=True)
+            check_bundle(restored / bundle.name, args.arch, work / "smoke-restored.json")
+        finally:
+            subprocess.run(["/usr/bin/hdiutil", "detach", devices[0]], check=True)
         digest = hashlib.sha256(archive.read_bytes()).hexdigest()
         (output / f"SHA256SUMS-macOS-{ARCH_NAMES[args.arch]}.txt").write_text(f"{digest}  {filename}\n", encoding="utf-8")
-        print(f"Verified native macOS archive: {archive}")
+        print(f"Verified native macOS application DMG: {archive}")
 
 
 if __name__ == "__main__":

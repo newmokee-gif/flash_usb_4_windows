@@ -13,8 +13,10 @@ SOURCE = Path(__file__).resolve().parents[1] / "прога/V2.py"
 TREE = ast.parse(SOURCE.read_text(encoding="utf-8"))
 NAMESPACE = {"os": os, "platform": platform}
 for node in TREE.body:
+    if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == "WINDOWS_ISO_CHOICES" for target in node.targets):
+        exec(compile(ast.Module(body=[node], type_ignores=[]), str(SOURCE), "exec"), NAMESPACE)
     if isinstance(node, ast.FunctionDef) and node.name in (
-        "is_arm64_host", "windows_iso_architecture", "is_arm64_executable",
+        "is_arm64_host", "windows_iso_architecture", "windows_iso_parameters", "is_arm64_executable",
     ):
         exec(compile(ast.Module(body=[node], type_ignores=[]), str(SOURCE), "exec"), NAMESPACE)
 
@@ -37,6 +39,41 @@ class WindowsARMTests(unittest.TestCase):
         for choice in ("Windows 11 (ARM64 Русская)", "Windows 11 (ARM64 English)"):
             self.assertEqual(NAMESPACE["windows_iso_architecture"](choice), "ARM64")
         self.assertEqual(NAMESPACE["windows_iso_architecture"]("Windows 11 (64-bit Русская)"), "x64")
+
+    def test_windows_10_has_four_real_language_architecture_variants(self):
+        variants = {name: values for name, values in NAMESPACE["WINDOWS_ISO_CHOICES"].items()
+                    if name.startswith("Windows 10 ")}
+        self.assertEqual(len(variants), 4)
+        self.assertEqual(set(variants.values()), {
+            ("10", "Russian", "x64"), ("10", "English", "x64"),
+            ("10", "Russian", "x86"), ("10", "English", "x86"),
+        })
+        for choice, expected in variants.items():
+            self.assertEqual(NAMESPACE["windows_iso_parameters"](choice), expected)
+            self.assertEqual(NAMESPACE["windows_iso_architecture"](choice), expected[2])
+
+    def test_invalid_windows_choice_never_defaults_to_another_iso(self):
+        for choice in ("", "Windows 10 (ARM64 Русская)", "Windows 11 (32-bit English)", "Windows 12"):
+            with self.subTest(choice=choice), self.assertRaises(ValueError):
+                NAMESPACE["windows_iso_parameters"](choice)
+
+    def test_fido_receives_selected_32bit_english_windows_10_parameters(self):
+        klass = next(n for n in TREE.body if isinstance(n, ast.ClassDef) and n.name == "WindowsOneClickUSB")
+        method = next(n for n in klass.body if isinstance(n, ast.FunctionDef) and n.name == "get_direct_microsoft_iso_url")
+        namespace = dict(NAMESPACE)
+        command_calls = []
+        namespace["run_cmd"] = lambda command, **kwargs: (command_calls.append(command) or (0, "https://software.download.prss.microsoft.com/test.iso\n", ""))
+        exec(compile(ast.Module(body=[method], type_ignores=[]), str(SOURCE), "exec"), namespace)
+        with tempfile.TemporaryDirectory() as directory:
+            (Path(directory) / "Fido.ps1").touch()
+            app = types.SimpleNamespace(tools_dir=directory, update_status=lambda *a: None,
+                                        win_version=types.SimpleNamespace(get=lambda: "Windows 10 (32-bit English)"))
+            result = namespace["get_direct_microsoft_iso_url"](app)
+        command = command_calls[0]
+        self.assertEqual(command[command.index("-Win") + 1], "10")
+        self.assertEqual(command[command.index("-Lang") + 1], "English")
+        self.assertEqual(command[command.index("-Arch") + 1], "x86")
+        self.assertTrue(result.startswith("https://software.download.prss.microsoft.com/"))
 
     def test_pe_machine_detects_real_arm64_not_x64(self):
         with tempfile.TemporaryDirectory() as directory:

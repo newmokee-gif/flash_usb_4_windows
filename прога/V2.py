@@ -68,8 +68,28 @@ def is_arm64_host():
     return machine.lower() in ("arm64", "aarch64")
 
 
+WINDOWS_ISO_CHOICES = {
+    "Windows 11 (64-bit Русская)": ("11", "Russian", "x64"),
+    "Windows 11 (64-bit English)": ("11", "English", "x64"),
+    "Windows 11 (ARM64 Русская)": ("11", "Russian", "ARM64"),
+    "Windows 11 (ARM64 English)": ("11", "English", "ARM64"),
+    "Windows 10 (64-bit Русская)": ("10", "Russian", "x64"),
+    "Windows 10 (64-bit English)": ("10", "English", "x64"),
+    "Windows 10 (32-bit Русская)": ("10", "Russian", "x86"),
+    "Windows 10 (32-bit English)": ("10", "English", "x86"),
+}
+
+
+def windows_iso_parameters(choice):
+    """Target ISO architecture is independent of the computer running this app."""
+    try:
+        return WINDOWS_ISO_CHOICES[choice]
+    except KeyError as exc:
+        raise ValueError("Выберите доступную версию Windows из списка.") from exc
+
+
 def windows_iso_architecture(choice):
-    return "ARM64" if "ARM64" in choice.upper() else "x64"
+    return windows_iso_parameters(choice)[2]
 
 
 def is_arm64_executable(path):
@@ -96,10 +116,16 @@ def is_admin():
 def run_as_admin():
     executable = sys.executable
     if getattr(sys, "frozen", False):
-        params = " ".join(f'"{a}"' for a in sys.argv[1:])
+        params = subprocess.list2cmdline(sys.argv[1:])
+        for key in list(os.environ):
+            if key.startswith("_PYI"):
+                os.environ.pop(key, None)
+        os.environ["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
     else:
-        params = " ".join(f'"{a}"' for a in sys.argv)
-    ctypes.windll.shell32.ShellExecuteW(None, "runas", executable, params, None, 1)
+        params = subprocess.list2cmdline(sys.argv)
+    result = ctypes.windll.shell32.ShellExecuteW(None, "runas", executable, params, None, 1)
+    if result <= 32:
+        raise RuntimeError("Не удалось получить права администратора; запуск отменён.")
     sys.exit(0)
 
 
@@ -209,7 +235,7 @@ class WindowsOneClickUSB:
     def __init__(self, root):
         self.root = root
         self.root.title("Windows 10/11 — One-Click USB Creator (PRO Fixed)")
-        self.root.geometry("620x610")
+        self.root.geometry("620x660")
         self.root.resizable(False, False)
         # --- ICON_START ---
         try:
@@ -348,13 +374,7 @@ class WindowsOneClickUSB:
             state="readonly",
             font=("Segoe UI", 9),
             width=26,
-            values=[
-                "Windows 11 (64-bit Русская)",
-                "Windows 10 (64-bit Русская)",
-                "Windows 11 (64-bit English)",
-                "Windows 11 (ARM64 Русская)",
-                "Windows 11 (ARM64 English)",
-            ],
+            values=list(WINDOWS_ISO_CHOICES),
         )
         self.ver_combo.pack(side="left", padx=(0, 5), ipady=3)
 
@@ -696,8 +716,7 @@ class WindowsOneClickUSB:
                 shutil.copyfileobj(resp, out)
 
         choice = self.win_version.get()
-        win_ver = "11" if "11" in choice else "10"
-        lang = "Russian" if "Русская" in choice else "English"
+        win_ver, lang, architecture = windows_iso_parameters(choice)
 
         _, out, _ = run_cmd(
             [
@@ -717,7 +736,7 @@ class WindowsOneClickUSB:
                 "-Lang",
                 lang,
                 "-Arch",
-                windows_iso_architecture(choice),
+                architecture,
                 "-GetUrl",
             ],
             timeout=60,

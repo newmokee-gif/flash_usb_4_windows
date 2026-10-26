@@ -11,6 +11,12 @@ def main():
     if sys.argv[1:] == ["install-deps"]:
         from dependencies import main as install_main
         return install_main()
+    if sys.argv[1:2] == ["--gnu-linux"]:
+        from raw_usb import main as raw_main
+        return raw_main(sys.argv[2:])
+    if len(sys.argv) == 1:
+        from platform_selector import main as chooser_main
+        return chooser_main()
     if sys.platform == "win32":
         runpy.run_path(str(source / "V2.py"), run_name="__main__")
     elif sys.platform.startswith("linux"):
@@ -30,4 +36,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

@@ -6,8 +6,11 @@ import subprocess
 import sys
 import traceback
 
-from macos_gui import MacUSB, build_write_command, main as gui_main
+from macos_gui import MacUSB, build_write_command
 import macos_usb
+import platform_selector
+import raw_usb
+from gnu_linux_gui import GNULinuxUSB
 from linux_usb import Device, subprocess_environment
 
 
@@ -18,6 +21,12 @@ def self_test(report):
     try:
         if sys.platform != "darwin" or not result["frozen"]:
             raise RuntimeError("This diagnostic requires the macOS frozen application")
+        import ssl
+        import certifi
+        context = ssl.create_default_context(cafile=certifi.where())
+        if context.cert_store_stats().get("x509_ca", 0) < 1:
+            raise RuntimeError("Bundled HTTPS certificate roots are missing")
+        result["https_certificate_roots"] = "passed"
         devices = macos_usb.list_devices()
         result["discovery"] = "passed"
         result["usb_devices"] = len(devices)
@@ -37,6 +46,24 @@ def self_test(report):
             result.update(gui="passed", tk=tk.TkVersion)
         finally:
             root.destroy()
+        root = tk.Tk()
+        try:
+            platform_selector.OSChooser(root)
+            root.update()
+            actual = {text.casefold() for text in labels(root)}
+            if not {"виндовс", "гну/линукс"}.issubset(actual):
+                raise RuntimeError("Both operating-system choices must be present")
+            result["selector"] = "passed"
+        finally:
+            root.destroy()
+        raw_usb.list_devices = lambda: []
+        root = tk.Tk()
+        try:
+            GNULinuxUSB(root)
+            root.update()
+            result["gnu_linux_gui"] = "passed"
+        finally:
+            root.destroy()
         dummy = Device("/dev/disk99999", 16 * 2**30, "diagnostic", "unused", (), "", ("unused",))
         command = build_write_command(Path("/tmp/unused.iso"), dummy, dummy.path)
         command = command[:command.index("write")] + ["--help"]
@@ -44,6 +71,12 @@ def self_test(report):
                                env=subprocess_environment(restart_app=True), check=True)
         if "write" not in child.stdout or "list" not in child.stdout:
             raise RuntimeError("The independent CLI process did not produce expected help")
+        gnu_child = subprocess.run([sys.executable, "--gnu-linux", "--help"], text=True,
+                                   capture_output=True, timeout=60, check=True,
+                                   env=subprocess_environment(restart_app=True))
+        if "write" not in gnu_child.stdout:
+            raise RuntimeError("The independent GNU/Linux CLI did not produce help")
+        result["gnu_linux_restart"] = "passed"
         result.update(restart="passed", status="passed")
         code = 0
     except Exception:
@@ -56,9 +89,12 @@ def self_test(report):
 def main():
     if len(sys.argv) == 3 and sys.argv[1] == "--self-test-report":
         return self_test(sys.argv[2])
+    if sys.argv[1:2] == ["--gnu-linux"]:
+        sys.argv.pop(1)
+        return raw_usb.main()
     if len(sys.argv) > 1:
         return macos_usb.main()
-    gui_main()
+    platform_selector.main()
     return 0
 
 

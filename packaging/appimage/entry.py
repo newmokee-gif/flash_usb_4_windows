@@ -4,8 +4,11 @@ import sys
 import time
 from pathlib import Path
 
-from linux_gui import LinuxUSB, build_write_command, main as gui_main
+from linux_gui import LinuxUSB, build_write_command
 from linux_usb import Device, main as cli_main, subprocess_environment
+import platform_selector
+import raw_usb
+from gnu_linux_gui import GNULinuxUSB
 
 
 def self_test():
@@ -29,6 +32,29 @@ def self_test():
         print(f"Bundled Python {sys.version.split()[0]}, Tk {tk.TkVersion}: GUI passed")
     finally:
         root.destroy()
+    root = tk.Tk()
+    try:
+        platform_selector.OSChooser(root)
+        root.update()
+        def labels(widget):
+            found = []
+            for child in widget.winfo_children():
+                if "text" in child.keys():
+                    found.append(str(child.cget("text")))
+                found.extend(labels(child))
+            return found
+        if not {"виндовс", "гну/линукс"}.issubset({text.casefold() for text in labels(root)}):
+            raise RuntimeError("Both operating-system choices must be present")
+    finally:
+        root.destroy()
+    raw_usb.list_devices = lambda: []
+    root = tk.Tk()
+    try:
+        GNULinuxUSB(root)
+        root.update()
+        print("Bundled selector and GNU/Linux GUI: passed")
+    finally:
+        root.destroy()
     device = Device("/dev/unused", 16 * 2**30, "self-test", "unused", (), "", ("unused",))
     command = build_write_command(Path("/tmp/unused.iso"), device, device.path)
     # Exercise the exact AppImage prefix used after pkexec, but only request
@@ -38,6 +64,12 @@ def self_test():
                            capture_output=True, text=True, timeout=60, check=True)
     if "write" not in child.stdout or "check" not in child.stdout:
         raise RuntimeError("Bundled relaunch did not return expected CLI help")
+    # Reuse AppImage's outer-launch prefix so subprocess reset works without FUSE.
+    gnu_command = command[:-1] + ["--gnu-linux", "--help"]
+    gnu_child = subprocess.run(gnu_command, env=subprocess_environment(restart_app=True),
+                               capture_output=True, text=True, timeout=60, check=True)
+    if "write" not in gnu_child.stdout:
+        raise RuntimeError("Bundled GNU/Linux relaunch did not return CLI help")
     print("Independent AppImage relaunch: CLI help passed")
     return 0
 
@@ -49,9 +81,12 @@ def main():
         sys.stderr.reconfigure(line_buffering=True)
     if sys.argv[1:] == ["--self-test"]:
         return self_test()
+    if sys.argv[1:2] == ["--gnu-linux"]:
+        sys.argv.pop(1)
+        return raw_usb.main()
     if len(sys.argv) > 1:
         return cli_main()
-    gui_main()
+    platform_selector.main()
     return 0
 
 

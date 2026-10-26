@@ -2,7 +2,6 @@ name: Windows ARM64
 
 on:
   push:
-    branches: [linux-support]
     tags: ['windows-arm-v*-linux*']
     paths:
       - прога/V2.py

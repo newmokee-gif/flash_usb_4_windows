@@ -58,6 +58,7 @@ jobs:
             trap "kill $xvfb_pid" EXIT
             export DISPLAY=:99 PYTHONDONTWRITEBYTECODE=1
             python3 -c "import sys, time, tkinter; sys.path.insert(0, \"прога\"); from linux_gui import LinuxUSB; time.sleep(1); root = tkinter.Tk(); app = LinuxUSB(root); root.update(); root.destroy()"
+            python3 tests/smoke_multios_gui.py
           ' 2>&1 | tee distro-check.log
           result=${PIPESTATUS[0]}
           set -e

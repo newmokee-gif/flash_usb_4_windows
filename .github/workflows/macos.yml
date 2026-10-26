@@ -2,7 +2,6 @@ name: macOS Apple Silicon and Intel
 
 on:
   push:
-    branches: [linux-support]
     tags: ['macos-v*-linux*']
     paths:
       - прога/macos_*.py
@@ -45,7 +44,7 @@ jobs:
         run: |
           test "$(uname -m)" = '${{ matrix.machine }}'
           brew install wimlib
-          python -m pip install PyInstaller==6.22.3
+          python -m pip install PyInstaller==6.22.3 certifi==2025.10.5
       - name: Tests, read-only discovery, real WIM fixture and bundle validation
         env:
           MACOS_ARCH: ${{ matrix.machine }}
@@ -54,6 +53,8 @@ jobs:
           (
             set -e
             python -m unittest discover -s tests -p 'test_macos*.py' -v
+            python -m unittest discover -s tests -p 'test_raw_usb.py' -v
+            python -m unittest discover -s tests -p 'test_image_download.py' -v
             python прога/macos_usb.py check
             python прога/macos_usb.py list
             fixture=$(mktemp -d)
@@ -65,6 +66,7 @@ jobs:
             wimlib-imagex split "$fixture/fixture.wim" "$fixture/install.swm" 1 --check
             wimlib-imagex verify "$fixture/install.swm" "--ref=$fixture/install*.swm"
             python tests/smoke_macos_images.py --wim "$fixture/fixture.wim"
+            sudo "$(command -v python)" tests/smoke_raw_macos.py
             python packaging/macos/build.py --arch "$MACOS_ARCH" --output macos-dist
           ) 2>&1 | tee macos-check.log
           result=${PIPESTATUS[0]}

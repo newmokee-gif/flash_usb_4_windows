@@ -2,13 +2,13 @@ name: Native Linux packages
 
 on:
   push:
-    branches: [linux-support]
     tags: ['packages-v*-linux*', 'packages-metadata-v*-linux*']
     paths:
       - packaging/**
       - tests/smoke_installed_package.py
       - .github/workflows/packages.yml
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read

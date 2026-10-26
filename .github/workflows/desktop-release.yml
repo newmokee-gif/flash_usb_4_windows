@@ -1,12 +1,53 @@
-name: Desktop installer buttons release
+name: Windows and GNU Linux all-platform release
 on:
   push:
-    tags: [v0.2.1]
+    branches: [linux-support]
+    tags: [v0.3.0]
+    paths:
+      - прога/**
+      - packaging/**
+      - tests/**
+      - scripts/publish_multios.py
+      - .github/workflows/**
 permissions:
   contents: read
 jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify official catalogue sources and checksum coverage
+        run: |
+          set +e
+          python scripts/verify_distro_catalog.py 2>&1 | tee catalogue-check.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python -c 'from pathlib import Path; t=Path("catalogue-check.log").read_text(errors="replace")[-3500:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: catalogue-verification
+          path: catalogue-check.log
   linux:
     uses: ./.github/workflows/linux.yml
+  packages:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/packages.yml
+  appimage:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/appimage.yml
+  linux-arm:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/linux-arm.yml
   macos:
     permissions:
       contents: write
@@ -32,6 +73,9 @@ jobs:
       - run: python -m pip install PyInstaller==6.22.3
       - run: python -m unittest discover -s tests -p test_package_manager_ui.py -v
       - run: python -m unittest discover -s tests -p test_windows_arm.py -v
+      - run: python -m unittest discover -s tests -p test_raw_usb.py -v
+      - run: python -m unittest discover -s tests -p test_image_download.py -v
+      - run: python -m unittest discover -s tests -p test_distro_catalog.py -v
       - name: Download and verify official WinGet packages without installing
         shell: pwsh
         run: |
@@ -57,7 +101,8 @@ jobs:
           path: desktop-dist/*
           if-no-files-found: error
   publish:
-    needs: [linux, macos, windows]
+    if: github.ref == 'refs/tags/v0.3.0'
+    needs: [catalog, linux, macos, windows, packages, appimage, linux-arm]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -75,13 +120,26 @@ jobs:
           pattern: macos-*
           path: desktop-dist
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          path: desktop-dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: appimage
+          path: desktop-dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-arm64-appimage
+          path: desktop-dist
       - name: Verify and publish all platforms
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set +e
-          python scripts/publish_desktop_update.py 2>&1 | tee publication.log
+          python scripts/publish_multios.py 2>&1 | tee publication.log
           result=${PIPESTATUS[0]}
           set -e
           if [ "$result" -ne 0 ]; then

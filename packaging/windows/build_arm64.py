@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Build and verify a genuinely native Windows ARM64 GUI distribution."""
+"""Build and verify one self-contained native Windows x64 or ARM64 EXE."""
 import argparse
 import hashlib
 import importlib.metadata
 import json
+import os
 from pathlib import Path
 import platform
 import shutil
@@ -37,7 +38,7 @@ def main():
     machine = 0xAA64 if args.arch == "ARM64" else 0x8664
     NAME = "WinUSB-Creator-Windows-" + args.arch
     if sys.platform != "win32" or platform.machine().lower() not in allowed or struct.calcsize("P") != 8:
-        raise RuntimeError("Build using native 64-bit ARM64 Python on Windows ARM64")
+        raise RuntimeError(f"Build using native 64-bit {args.arch} Python on matching Windows hardware")
     require_arm64_pe(sys.executable, machine)
     if importlib.metadata.version("pyinstaller") != "6.22.3":
         raise RuntimeError("Install PyInstaller==6.22.3")
@@ -46,20 +47,31 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="winusb-arm-build-") as directory:
         work = Path(directory)
+        docs = work / "Documentation"
+        docs.mkdir()
+        for name in ("LICENSE", "README.md"):
+            shutil.copyfile(source / name, docs / name)
+        license_path = Path(sys.base_prefix) / "LICENSE.txt"
+        if license_path.is_file():
+            shutil.copyfile(license_path, docs / "Python-LICENSE.txt")
+        distribution = importlib.metadata.distribution("pyinstaller")
+        for item in distribution.files or []:
+            if "copying" in str(item).lower() or "license" in str(item).lower():
+                candidate = Path(distribution.locate_file(item))
+                if candidate.is_file():
+                    shutil.copyfile(candidate, docs / ("PyInstaller-" + candidate.name))
         subprocess.run([
-            sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir", "--windowed",
+            sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile", "--windowed",
             "--name", NAME, "--paths", str(source / "прога"),
             "--icon", str(source / "прога/app_icon.ico"),
+            "--add-data", str(docs) + os.pathsep + "Documentation",
             "--distpath", str(work / "dist"), "--workpath", str(work / "work"),
             "--specpath", str(work), str(source / "packaging/windows/entry.py"),
         ], check=True)
-        package = work / "dist" / NAME
-        exe = package / (NAME + ".exe")
+        exe = work / "dist" / (NAME + ".exe")
         require_arm64_pe(exe, machine)
-        # All collected binary extensions/libraries must also be ARM64.
-        for path in package.rglob("*"):
-            if path.suffix.lower() in (".dll", ".pyd", ".exe"):
-                require_arm64_pe(path, machine)
+        # The frozen diagnostic checks all PE files in its actual onefile
+        # extraction directory, not a separately built approximation.
         report = work / "smoke.json"
         result = subprocess.run([str(exe), "--self-test-report", str(report)], timeout=120)
         if not report.exists():
@@ -68,21 +80,8 @@ def main():
         result.check_returncode()
         if json.loads(report.read_text(encoding="utf-8"))["status"] != "passed":
             raise RuntimeError("Frozen GUI check failed")
-        shutil.copyfile(source / "LICENSE", package / "LICENSE")
-        shutil.copyfile(source / "README.md", package / "README.md")
-        if args.arch == "ARM64":
-            shutil.copyfile(source / "packaging/windows/README-ARM64.txt", package / "README-ARM64.txt")
-        # Redistributed Python/PyInstaller runtime license notices.
-        for license_path in (Path(sys.base_prefix) / "LICENSE.txt",):
-            if license_path.exists():
-                shutil.copyfile(license_path, package / "Python-LICENSE.txt")
-        distribution = importlib.metadata.distribution("pyinstaller")
-        for item in distribution.files or []:
-            if "copying" in str(item).lower() or "license" in str(item).lower():
-                candidate = Path(distribution.locate_file(item))
-                if candidate.is_file():
-                    shutil.copyfile(candidate, package / ("PyInstaller-" + candidate.name))
-        artifact = Path(shutil.make_archive(str(output / NAME), "zip", work / "dist", NAME))
+        artifact = output / exe.name
+        shutil.copyfile(exe, artifact)
         digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
         (output / f"SHA256SUMS-Windows-{args.arch}.txt").write_text(f"{digest}  {artifact.name}\n", encoding="utf-8")
         print(f"Built and verified {artifact}")
