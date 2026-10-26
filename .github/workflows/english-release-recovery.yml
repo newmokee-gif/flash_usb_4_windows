@@ -1,0 +1,46 @@
+name: Publish verified English release v0.3.3
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/recover_english_release.py
+      - .github/workflows/english-release-recovery.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: publish-english-v0.3.3
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: operations
+      - uses: actions/checkout@v4
+        with:
+          path: source
+          ref: c4705c846dd770481785a36056174c8f79b94bf9
+      - name: Test publication safeguards
+        working-directory: operations
+        run: |
+          python -m unittest discover -s tests -p test_publish_multios.py -v
+          python -m unittest discover -s tests -p test_recover_multios.py -v
+      - name: Verify checked artifacts and publish
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set +e
+          python ../operations/scripts/recover_english_release.py 2>&1 | tee recovery.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python -c 'from pathlib import Path; t=Path("recovery.log").read_text(errors="replace")[-4000:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"

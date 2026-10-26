@@ -74,20 +74,23 @@ def main():
     verify_staged(output, verified_hashes)
     provenance = {"source_commit": commit, "tag": TAG,
                   "workflow_run": os.environ.get("GITHUB_RUN_ID"),
+                  "build_workflow_run": os.environ.get("VERIFIED_BUILD_RUN", os.environ.get("GITHUB_RUN_ID")),
                   "artifacts": {p.name: {"sha256": sha256(p), "size": p.stat().st_size}
                                 for p in sorted(output.iterdir())},
                   "previous_release": {"id": old["id"], "tag": old["tag_name"]}}
     (output / "RELEASE-PROVENANCE.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
     (output / "SHA256SUMS.txt").write_text("".join(f"{sha256(p)}  {p.name}\n" for p in sorted(output.iterdir())), encoding="utf-8")
     notes = (root / "docs/releases/v0.3.3.md").read_text(encoding="utf-8")
-    new = gh.api("releases", "POST", {"tag_name": TAG, "target_commitish": commit,
+    # The tag already exists and was verified above. Do not request a target
+    # commit update: GitHub may require workflow-write permission for that.
+    new = gh.api("releases", "POST", {"tag_name": TAG,
         "name": "WinUSB Creator 0.3.3 — Windows and GNU/Linux", "body": notes,
         "draft": True, "prerelease": False})
     gh.upload(TAG, sorted(output.iterdir()))
     verify_new_release(gh, new["id"], TAG, output, root / "verify-v0.3.3")
-    gh.edit(new["id"], draft=False, prerelease=False, make_latest="true")
+    gh.edit(new["id"], tag_name=TAG, draft=False, prerelease=False, make_latest="true")
     require(gh.api("releases/latest")["id"] == new["id"], "Publication is not Latest")
-    gh.edit(old["id"], draft=True)
+    gh.edit(old["id"], tag_name=old["tag_name"], draft=True, prerelease=old["prerelease"])
     require(gh.release(old["id"])["draft"], "Previous release not hidden")
     print(f"Published {TAG}; all applications downloaded and checksum-verified.")
 
