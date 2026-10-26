@@ -1,6 +1,5 @@
 """Update documented release titles/bodies only; never touch assets or visibility."""
 from pathlib import Path
-import json
 import re
 import subprocess
 from consolidate_release import GitHub, require
@@ -43,8 +42,9 @@ def translate(gh, root):
         require(identity(current) == identity(original), "Release changed before translation")
         ref = gh.api(f"git/ref/tags/{tag}")
         require(ref.get("ref") == f"refs/tags/{tag}", "Original tag is missing")
-        gh.edit(current["id"], name=name, body=body, tag_name=tag,
-                draft=current["draft"], prerelease=current["prerelease"])
+        if current["tag_name"] != tag or current.get("name") != name or current.get("body") != body:
+            gh.edit(current["id"], name=name, body=body, tag_name=tag,
+                    draft=current["draft"], prerelease=current["prerelease"])
         updated = gh.release(current["id"])
         require(updated["name"] == name and updated["body"] == body,
                 "Release translation was not saved")
@@ -55,8 +55,10 @@ def translate(gh, root):
         print(f"::notice::English release notes verified: {tag}")
     for release in releases:
         if release["id"] not in {plan[0]["id"] for plan in plans}:
-            metadata = json.dumps({key: release.get(key) for key in ("tag_name", "name", "body")}, ensure_ascii=False)
-            print("::notice::Historical notes for translation: " + metadata.replace("%", "%25"))
+            text = (release.get("name") or "") + (release.get("body") or "")
+            require(not re.search(r"[\u0400-\u04ff]", text),
+                    f"Untranslated historical release: {release['tag_name']}")
+            print(f"::notice::Historical notes already English: {release['tag_name']}")
 
 
 if __name__ == "__main__":
