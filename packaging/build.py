@@ -17,8 +17,8 @@ import tarfile
 import tempfile
 
 
-DEB_VERSION = "0.3.0"
-RPM_VERSION = "0.3.0"
+DEB_VERSION = "0.3.1"
+RPM_VERSION = "0.3.1"
 RPM_RELEASE = "1"
 
 
@@ -32,7 +32,7 @@ def stage_payload(source: Path, stage: Path, epoch: int):
     app = stage / "usr/share/flash-usb"
     for name in ("flash_usb.py", "прога/linux_usb.py", "прога/linux_gui.py", "прога/dependencies.py",
                  "прога/platform_selector.py", "прога/gnu_linux_gui.py", "прога/raw_usb.py",
-                 "прога/image_download.py", "прога/distro_catalog.py"):
+                 "прога/image_download.py", "прога/distro_catalog.py", "прога/package_manager_ui.py"):
         copy_file(source / name, app / name)
     copy_file(source / "packaging/flash-usb", stage / "usr/bin/flash-usb", True)
     copy_file(source / "packaging/flash-usb.desktop", stage / "usr/share/applications/flash-usb.desktop")

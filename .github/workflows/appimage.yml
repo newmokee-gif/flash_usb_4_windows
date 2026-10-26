@@ -100,11 +100,11 @@ jobs:
             xvfb_pid=$!
             trap "kill $xvfb_pid" EXIT
             export DISPLAY=:99
-            runuser -u nobody -- /app/flash-usb-v0.3.0-x86_64.AppImage --appimage-extract-and-run --help
-            runuser -u nobody -- /app/flash-usb-v0.3.0-x86_64.AppImage --appimage-extract-and-run check
-            runuser -u nobody -- /app/flash-usb-v0.3.0-x86_64.AppImage --appimage-extract-and-run list
-            runuser -u nobody -- /app/flash-usb-v0.3.0-x86_64.AppImage --appimage-extract-and-run --self-test
-            /app/flash-usb-v0.3.0-x86_64.AppImage --appimage-extract-and-run --self-test
+            runuser -u nobody -- /app/flash-usb-v0.3.1-x86_64.AppImage --appimage-extract-and-run --help
+            runuser -u nobody -- /app/flash-usb-v0.3.1-x86_64.AppImage --appimage-extract-and-run check
+            runuser -u nobody -- /app/flash-usb-v0.3.1-x86_64.AppImage --appimage-extract-and-run list
+            runuser -u nobody -- /app/flash-usb-v0.3.1-x86_64.AppImage --appimage-extract-and-run --self-test
+            /app/flash-usb-v0.3.1-x86_64.AppImage --appimage-extract-and-run --self-test
           ' 2>&1 | tee appimage-test.log
           result=${PIPESTATUS[0]}
           set -e
@@ -144,11 +144,11 @@ jobs:
 
           ## AppImage (x86_64)
 
-          Download `flash-usb-v0.3.0-x86_64.AppImage`, then:
+          Download `flash-usb-v0.3.1-x86_64.AppImage`, then:
 
           ```sh
-          chmod +x flash-usb-v0.3.0-x86_64.AppImage
-          ./flash-usb-v0.3.0-x86_64.AppImage
+          chmod +x flash-usb-v0.3.1-x86_64.AppImage
+          ./flash-usb-v0.3.1-x86_64.AppImage
           ```
 
           Without FUSE: add `--appimage-extract-and-run` to the command.

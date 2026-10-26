@@ -21,6 +21,8 @@ import tkinter
 
 sys.path.insert(0, '/usr/share/flash-usb/прога')
 from linux_gui import LinuxUSB
+from gnu_linux_gui import GNULinuxUSB
+import raw_usb
 
 for attempt in range(100):
     try:
@@ -32,6 +34,13 @@ for attempt in range(100):
         time.sleep(0.1)
 app = LinuxUSB(root)
 root.update()
+root.destroy()
+raw_usb.list_devices = lambda: []
+root = tkinter.Tk()
+app = GNULinuxUSB(root)
+root.update()
+assert app.install_button.winfo_ismapped()
+assert app.install_button.cget('style') == 'Setup.TButton'
 root.destroy()
 print('Installed GUI startup passed as an unprivileged user')
 """
@@ -60,7 +69,8 @@ def run_unprivileged(command):
 
 def main():
     files = [WRAPPER, DESKTOP, ICON, APP / "flash_usb.py",
-             APP / "прога/linux_usb.py", APP / "прога/linux_gui.py"]
+             APP / "прога/linux_usb.py", APP / "прога/linux_gui.py",
+             APP / "прога/package_manager_ui.py", APP / "прога/gnu_linux_gui.py"]
     for path in files:
         metadata = path.stat()
         require(stat.S_ISREG(metadata.st_mode), f"Not a regular file: {path}")

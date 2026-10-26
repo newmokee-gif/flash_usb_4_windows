@@ -25,7 +25,7 @@ jobs:
       matrix:
         include:
           # Use the current free ARM runner; bundled binaries are audited for macOS 15.
-          - runner: macos-26
+          - runner: macos-latest
             python_arch: arm64
             machine: arm64
             name: AppleSilicon

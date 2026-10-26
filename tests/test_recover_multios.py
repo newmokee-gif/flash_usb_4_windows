@@ -248,6 +248,13 @@ class PublicationGuardTests(unittest.TestCase):
 
 class CompleteRecoveryTests(unittest.TestCase):
     def setUp(self):
+        # Recovery runs the publisher from the pinned v0.3.0 checkout, not the
+        # current release publisher. Retain that artifact contract in fixtures.
+        old_applications = {name for names in (*recovery.ARTIFACT_FILES.values(), recovery.ARM_FILES)
+                            for name in names if not name.startswith("SHA256SUMS-")}
+        original_contract = patch.object(original_publisher, "EXPECTED", old_applications)
+        original_contract.start()
+        self.addCleanup(original_contract.stop)
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)

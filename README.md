@@ -12,14 +12,14 @@
 | Windows 11 ARM64 | `WinUSB-Creator-Windows-ARM64.exe` |
 | macOS 15+ Apple Silicon | `WinUSB-Creator-macOS-AppleSilicon.dmg` |
 | macOS 15+ Intel | `WinUSB-Creator-macOS-Intel.dmg` |
-| Debian x64/ARM64 | `flash-usb_0.3.0_all.deb` |
-| Fedora x64/ARM64 | `flash-usb-0.3.0-1.noarch.rpm` |
-| Debian/Fedora/Arch x64 | `flash-usb-v0.3.0-x86_64.AppImage` |
-| Debian/Fedora ARM64 | `flash-usb-v0.3.0-aarch64.AppImage` |
+| Debian x64/ARM64 | `flash-usb_0.3.1_all.deb` |
+| Fedora x64/ARM64 | `flash-usb-0.3.1-1.noarch.rpm` |
+| Debian/Fedora/Arch x64 | `flash-usb-v0.3.1-x86_64.AppImage` |
+| Debian/Fedora ARM64 | `flash-usb-v0.3.1-aarch64.AppImage` |
 
 Windows EXE автономный: отдельная папка `_internal` не нужна. Откройте DMG на Mac и перетащите приложение в «Программы». В AppImage включены Python/Tk; нужны glibc 2.36+ и графическая сессия. Выдайте файлу право запуска; если FUSE недоступен, используйте `--appimage-extract-and-run`.
 
-DEB/RPM устанавливаются через `sudo apt install ./flash-usb_0.3.0_all.deb` или `sudo dnf install ./flash-usb-0.3.0-1.noarch.rpm`. Менеджер установит зависимости, включая aria2. Эти пакеты используют системный Python.
+DEB/RPM устанавливаются через `sudo apt install ./flash-usb_0.3.1_all.deb` или `sudo dnf install ./flash-usb-0.3.1-1.noarch.rpm`. Менеджер установит зависимости, включая aria2. Эти пакеты используют системный Python.
 
 Контрольные суммы файлов — в `SHA256SUMS.txt`, сведения о сборке — в `RELEASE-PROVENANCE.json`. Исходники доступны по тегу релиза. GitHub сам добавляет ссылки Source code ZIP/tar.gz; скачивать их для запуска приложения не нужно.
 

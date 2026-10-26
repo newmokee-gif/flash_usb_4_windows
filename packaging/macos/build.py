@@ -160,7 +160,7 @@ def main():
         info = bundle / "Contents/Info.plist"
         data = plistlib.loads(info.read_bytes())
         data.update(LSMinimumSystemVersion=MINIMUM_MACOS, NSHighResolutionCapable=True,
-                    CFBundleShortVersionString="0.3.0", CFBundleVersion="0.3.0")
+                    CFBundleShortVersionString="0.3.1", CFBundleVersion="0.3.1")
         info.write_bytes(plistlib.dumps(data))
         subprocess.run(["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(bundle)], check=True)
         check_bundle(bundle, args.arch, work / "smoke-built.json")
