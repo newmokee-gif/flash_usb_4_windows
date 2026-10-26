@@ -25,7 +25,7 @@ ISO, а не утверждение о поддержке всех сущест�
 | Kali Linux | cdimage.kali.org | x64, ARM64 Installer |
 | openSUSE | download.opensuse.org | x64, ARM64 Tumbleweed NET |
 | NixOS | channels.nixos.org | x64, ARM64 Minimal |
-| BunsenLabs | ddl.bunsenlabs.org | x64 Boron Live |
+| BunsenLabs | ddl.bunsenlabs.org | x64 Stable Live |
 | Bodhi Linux | SourceForge / bodhilinux | x64 Standard |
 | Mageia | mageia.org → зеркало, выбранное издателем | x64 Live Xfce |
 | Porteus | mirrors.dotsrc.org/porteus | x64 Xfce |
