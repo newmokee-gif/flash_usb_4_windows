@@ -71,11 +71,22 @@ jobs:
           python-version: '3.13'
           architecture: ${{ matrix.python }}
       - run: python -m pip install PyInstaller==6.22.3
-      - run: python -m unittest discover -s tests -p test_package_manager_ui.py -v
-      - run: python -m unittest discover -s tests -p test_windows_arm.py -v
-      - run: python -m unittest discover -s tests -p test_raw_usb.py -v
-      - run: python -m unittest discover -s tests -p test_image_download.py -v
-      - run: python -m unittest discover -s tests -p test_distro_catalog.py -v
+      - name: Native Windows policy, download and disk discovery checks
+        shell: pwsh
+        run: |
+          $result = 0
+          foreach ($pattern in @('test_package_manager_ui.py', 'test_windows_arm.py', 'test_raw_usb.py', 'test_image_download.py', 'test_distro_catalog.py')) {
+            python -m unittest discover -s tests -p $pattern -v 2>&1 | Tee-Object -FilePath native-tests.log -Append
+            if ($LASTEXITCODE -ne 0) { $result = $LASTEXITCODE; break }
+          }
+          if ($result -eq 0) {
+            python tests/smoke_raw_windows.py 2>&1 | Tee-Object -FilePath native-tests.log -Append
+            $result = $LASTEXITCODE
+          }
+          if ($result -ne 0) {
+            python -c 'from pathlib import Path; t=Path("native-tests.log").read_text(errors="replace")[-3500:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          }
+          exit $result
       - name: Download and verify official WinGet packages without installing
         shell: pwsh
         run: |

@@ -69,7 +69,7 @@ for arch, debarch, rpmarch, nixarch in (("x64", "amd64", "x86_64", "x86_64"), ("
     key = "x64" if arch == "x64" else "arm64"
     _entries += [
         channel(f"debian-{key}", "Debian", "Stable netinst", arch, f"https://cdimage.debian.org/debian-cd/current/{debarch}/iso-cd/", rf"debian-[\d.]+-{debarch}-netinst\.iso", torrent=f"https://cdimage.debian.org/debian-cd/current/{debarch}/bt-cd/{{filename}}.torrent"),
-        channel(f"fedora-{key}", "Fedora", "43 Workstation", arch, f"https://download.fedoraproject.org/pub/fedora/linux/releases/43/Workstation/{rpmarch}/iso/", rf"Fedora-Workstation-Live(?:-43)?-{rpmarch}-43-[\d.]+\.iso|Fedora-Workstation-Live-43-[\d.]+\.{rpmarch}\.iso|Fedora-Workstation-Live-{rpmarch}-43-[\d.]+\.iso", "", checksum_pattern=r".*CHECKSUM"),
+        channel(f"fedora-{key}", "Fedora", "43 Workstation", arch, f"https://download.fedoraproject.org/pub/fedora/linux/releases/43/Workstation/{rpmarch}/iso/", rf"Fedora-Workstation-Live(?:-43)?-{rpmarch}-43-[\d.]+\.iso|Fedora-Workstation-Live-43-[\d.]+\.{rpmarch}\.iso|Fedora-Workstation-Live-{rpmarch}-43-[\d.]+\.iso", "", checksum_pattern=r".*CHECKSUM", torrent=f"https://torrent.fedoraproject.org/torrents/Fedora-Workstation-Live-{rpmarch}-43.torrent"),
         channel(f"rocky-{key}", "Rocky Linux", "9 Minimal", arch, f"https://dl.rockylinux.org/pub/rocky/9/isos/{rpmarch}/", rf"Rocky-9[\d.]*-{rpmarch}-minimal\.iso", "CHECKSUM"),
         channel(f"alma-{key}", "AlmaLinux", "9 Minimal", arch, f"https://repo.almalinux.org/almalinux/9/isos/{rpmarch}/", rf"AlmaLinux-9[\d.]*-{rpmarch}-minimal\.iso", "CHECKSUM"),
         channel(f"centos-{key}", "CentOS Stream", "9 DVD", arch, f"https://mirror.stream.centos.org/9-stream/BaseOS/{rpmarch}/iso/", rf"CentOS-Stream-9-(?:latest|[\d.]+)-{rpmarch}-dvd1\.iso", "CHECKSUM"),
@@ -113,6 +113,14 @@ def _latest(names):
     return sorted(names, key=lambda n: [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", n)])[-1]
 
 
+def _digest(text, filename, algorithm, *, per_image=False):
+    # A filename-free hash is acceptable only at an explicit per-image URL.
+    length = {"sha256": 64, "sha512": 128}[algorithm]
+    if per_image and re.fullmatch(rf"\s*[a-fA-F0-9]{{{length}}}\s*", text):
+        return text.strip().lower()
+    return checksum_from_manifest(text, filename, algorithm)
+
+
 def resolve_image(entry):
     """Resolve official metadata to one image whose exact checksum is known."""
     if entry.api_json_url:
@@ -126,8 +134,17 @@ def resolve_image(entry):
         return replace(entry, image_url=url, filename=filename, sha256=digest.lower(), api_json_url="")
     if not entry.pattern:
         manifest = _metadata(entry.checksum_url)
-        digest = checksum_from_manifest(manifest, entry.filename, entry.checksum_algorithm)
-        return replace(entry, sha256=digest if entry.checksum_algorithm == "sha256" else None)
+        filename = entry.filename
+        if filename.startswith("latest-nixos-"):
+            candidates = _manifest_names(manifest)
+            if len(candidates) == 1:
+                candidate = next(iter(candidates))
+                arch = "x86_64" if entry.architecture == "x64" else "aarch64"
+                if re.fullmatch(rf"nixos-minimal-[A-Za-z0-9_.+-]+-{arch}-linux\.iso", candidate):
+                    filename = candidate
+        digest = _digest(manifest, filename, entry.checksum_algorithm,
+                         per_image=entry.checksum_url == entry.image_url + ".sha256")
+        return replace(entry, filename=filename, sha256=digest if entry.checksum_algorithm == "sha256" else None)
     base = entry.image_url
     checksum_url = entry.checksum_url
     if entry.checksum_suffix or entry.checksum_pattern:
@@ -151,7 +168,7 @@ def resolve_image(entry):
             raise DownloadError(f"{entry.distro}: подходящий ISO отсутствует в официальных контрольных суммах.")
     else:
         filename = _latest(names)
-    digest = checksum_from_manifest(manifest, filename, entry.checksum_algorithm)
+    digest = _digest(manifest, filename, entry.checksum_algorithm, per_image=bool(entry.checksum_suffix))
     image_url = urljoin(base, filename)
     torrent = entry.torrent_template.format(image_url=image_url, filename=filename,
         arch_date=filename.removeprefix("archlinux-").removesuffix("-x86_64.iso")) if entry.torrent_template else None

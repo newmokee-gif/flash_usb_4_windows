@@ -256,7 +256,8 @@ def download_torrent(url, filename, directory, aria, *, cancelled=None):
         command.append(f"--select-file={selection}")
     command.append(str(meta))
     with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                          env=runtime_environment()) as process:
+                          env=runtime_environment(),
+                          creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0) as process:
         try:
             while True:
                 _cancelled(cancelled)

@@ -30,6 +30,8 @@ def validate(entry):
                 result["torrent"] = "HTTPS fallback: " + str(error)
     except Exception as error:
         result.update(status="error", error=str(error))
+        message = (entry.id + ": " + str(error)).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        print("::error::" + message, flush=True)
     print(json.dumps(result, ensure_ascii=False), flush=True)
     return result
 

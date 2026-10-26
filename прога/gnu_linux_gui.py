@@ -186,7 +186,7 @@ class GNULinuxUSB:
         if self.operation == "download":
             self.cancelled.set()
             self.cancel_button.configure(state="disabled")
-            self.append("Отмена загрузки… (ответ сервера может занять до 30 секунд)")
+            self.append("Отмена загрузки… ожидается завершение текущего запроса к серверу.")
 
     def write(self):
         if self.operation:

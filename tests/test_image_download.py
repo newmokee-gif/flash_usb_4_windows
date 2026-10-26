@@ -110,7 +110,9 @@ class DownloadWorkflowTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
-        self.directory = Path(self.temp.name)
+        # macOS exposes temporary paths through /var -> /private/var. Compare
+        # the same canonical paths returned by the downloader on every host.
+        self.directory = Path(self.temp.name).resolve()
         self.sha = hashlib.sha256(self.content).hexdigest()
         self.image = {"image_url": "https://official.example/linux.iso", "sha256": self.sha}
 
@@ -129,7 +131,7 @@ class DownloadWorkflowTests(unittest.TestCase):
         result = self.run_download()
         self.assertEqual(result.path.read_bytes(), self.content)
         self.assertEqual(result.sha256, self.sha)
-        self.assertEqual(list(self.directory.iterdir()), [result.path])
+        self.assertEqual([path.resolve() for path in self.directory.iterdir()], [result.path.resolve()])
 
     def test_bad_checksum_never_publishes_image(self):
         self.image["sha256"] = "0" * 64
