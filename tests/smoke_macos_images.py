@@ -50,6 +50,10 @@ def main():
         image = work / "windows.iso"
         mac._run(["hdiutil", "makehybrid", "-iso", "-udf", "-o", str(image), str(tree)])
         attached = mac._attach_iso(image, source)
+        registry = mac._ioreg_ids(mac._plist(["ioreg", "-a", "-r", "-l", "-c", "IOMedia"]))
+        if Path(attached).name not in registry:
+            raise RuntimeError("Attached image has no verifiable IORegistry media identity")
+        print("Native IORegistry media identity verified", flush=True)
         describe_schema("attached virtual disk", mac._info(attached))
         info = mac._info(str(source))
         describe_schema("ISO source volume", info)

@@ -219,7 +219,7 @@ def _snapshot():
     if not isinstance(topology, dict) or not isinstance(topology.get("AllDisksAndPartitions"), list):
         raise USBError("Cannot enumerate physical disks")
     roots = _root_disks(_info("/"), _plist(["diskutil", "apfs", "list", "-plist"]))
-    registry = _ioreg_ids(_plist(["ioreg", "-a", "-r", "-c", "IOMedia"]))
+    registry = _ioreg_ids(_plist(["ioreg", "-a", "-r", "-l", "-c", "IOMedia"]))
     devices = []
     for node in topology["AllDisksAndPartitions"]:
         if not isinstance(node, dict):
