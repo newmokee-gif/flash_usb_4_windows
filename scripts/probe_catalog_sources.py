@@ -2,6 +2,7 @@
 from concurrent.futures import ThreadPoolExecutor
 from html.parser import HTMLParser
 import json
+import sys
 import urllib.request
 
 URLS = {
@@ -83,5 +84,6 @@ def probe(item):
     return report
 
 if __name__ == "__main__":
+    batch = int(sys.argv[1]) if len(sys.argv) > 1 else 0
     with ThreadPoolExecutor(max_workers=12) as pool:
-        list(pool.map(probe, URLS.items()))
+        list(pool.map(probe, list(URLS.items())[batch * 8:(batch + 1) * 8]))
