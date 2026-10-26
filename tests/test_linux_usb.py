@@ -102,6 +102,18 @@ class SourceTests(unittest.TestCase):
         with self.assertRaises(usb.USBError):
             usb._validate_source(self.root)
 
+    def test_arm64_only_bootloader_accepted(self):
+        self.windows_source()
+        (self.root / "efi/boot/bootx64.efi").unlink()
+        for filename in ("bootaa64.efi", "BOOTAA64.EFI"):
+            with self.subTest(filename=filename):
+                loader = self.add(f"efi/boot/{filename}")
+                try:
+                    files, _, _ = usb._validate_source(self.root)
+                    self.assertIn(loader.relative_to(self.root), [path for path, _ in files])
+                finally:
+                    loader.unlink()
+
     def test_valid_windows_source(self):
         self.windows_source()
         files, total, split_wim = usb._validate_source(self.root)

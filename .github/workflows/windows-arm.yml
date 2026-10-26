@@ -1,0 +1,89 @@
+name: Windows ARM64
+
+on:
+  push:
+    branches: [linux-support]
+    tags: ['windows-arm-v*-linux*']
+    paths:
+      - прога/V2.py
+      - packaging/windows/**
+      - tests/test_windows_arm.py
+      - .github/workflows/windows-arm.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: arm64
+      - name: Install native ARM64 builder
+        run: python -m pip install PyInstaller==6.22.3
+      - name: Test Windows architecture policy
+        run: python -m unittest discover -s tests -p test_windows_arm.py -v
+      - name: Build and exercise native ARM64 EXE
+        shell: pwsh
+        run: |
+          python packaging/windows/build_arm64.py --output windows-arm 2>&1 | Tee-Object -FilePath windows-arm-build.log
+          $result = $LASTEXITCODE
+          if ($result -ne 0) {
+            python -c 'from pathlib import Path; t=Path("windows-arm-build.log").read_text(errors="replace")[-3000:]; print("::error::" + t.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
+          }
+          exit $result
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-arm64
+          path: windows-arm/*
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/windows-arm-v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-arm64
+          path: windows-arm
+      - name: Append native Windows ARM64 files to the existing release
+        working-directory: windows-arm
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          release="${GITHUB_REF_NAME#windows-arm-}"
+          sha256sum -c SHA256SUMS-Windows-ARM64.txt
+          gh release view "$release"
+          gh release upload "$release" WinUSB-Creator-Windows-ARM64.zip SHA256SUMS-Windows-ARM64.txt
+          gh release view "$release" --json body --jq .body > release-notes.md
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          p = Path('release-notes.md')
+          p.write_text(p.read_text() + '''
+
+          ## Native Windows ARM64
+
+          Download and extract `WinUSB-Creator-Windows-ARM64.zip`, then run
+          `WinUSB-Creator-Windows-ARM64.exe`; keep `_internal` next to it.
+          Python and Tk are bundled. The executable and bundled DLL/PYD files
+          are verified as native ARM64 PE files; GUI/WinAPI smoke tests ran on
+          `windows-11-arm`. The application requests administrator privileges.
+          ARM64 hosts default to Windows 11 ARM64 ISO; x64 targets remain selectable.
+          Downloads require a separately installed native ARM64 aria2c in PATH;
+          local ISO writing works without aria2. No silent x64 helper download.
+          ARM64 Windows is UEFI-only. Physical USB/boot and live Microsoft ISO
+          download were not tested. The ZIP is not code-signed.
+          Checksums: `SHA256SUMS-Windows-ARM64.txt`.
+          ''' + '\nBuild source commit: `' + os.environ['GITHUB_SHA'] + '`.\n')
+          PY
+          gh release edit "$release" --notes-file release-notes.md

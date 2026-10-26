@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build a genuine x86_64 AppImage with bundled Python and Tcl/Tk.
+"""Build a native x86_64 or aarch64 AppImage with bundled Python and Tcl/Tk.
 
 Run inside Debian 12 (glibc 2.36), using a venv with PyInstaller==6.22.3.
 Required packages: python3-venv, python3-tk, libpython3.11, binutils, ca-certificates.
@@ -21,25 +21,49 @@ import urllib.request
 
 
 VERSION = "v0.2.0-linux.2"
-ARTIFACT = f"flash-usb-{VERSION}-x86_64.AppImage"
 PYINSTALLER_VERSION = "6.22.3"
 # Binary hashes are GitHub's authoritative release-asset SHA256 digests:
 # https://github.com/AppImage/appimagetool/releases/expanded_assets/1.9.1
 # https://github.com/AppImage/type2-runtime/releases/expanded_assets/20251108
-DOWNLOADS = {
-    "appimagetool.AppImage": (
-        "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage",
-        "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0",
-    ),
-    "runtime-x86_64": (
-        "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64",
-        "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d",
-    ),
-    "runtime-LICENSE": (
-        "https://raw.githubusercontent.com/AppImage/type2-runtime/20251108/LICENSE",
-        "aa154fc9070614bbe7921f89db11efd1dba7a1f3a41685958110e2230f9c0ca1",
-    ),
+APPIMAGETOOL_SHA256 = {
+    "x86_64": "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0",
+    "aarch64": "f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158",
 }
+RUNTIME_SHA256 = {
+    "x86_64": "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d",
+    "aarch64": "00cbdfcf917cc6c0ff6d3347d59e0ca1f7f45a6df1a428a0d6d8a78664d87444",
+}
+
+
+def native_architecture():
+    """Select tools matching the actual builder, never a cross-build label."""
+    if sys.platform != "linux":
+        raise RuntimeError("AppImages must be built on Linux")
+    machine = platform.machine().lower()
+    architecture = {
+        "x86_64": "x86_64", "amd64": "x86_64",
+        "aarch64": "aarch64", "arm64": "aarch64",
+    }.get(machine)
+    if architecture is None:
+        raise RuntimeError(f"Unsupported build architecture {machine!r}; use Linux x86_64 or aarch64")
+    return architecture
+
+
+def downloads_for(architecture):
+    return {
+        "appimagetool.AppImage": (
+            f"https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-{architecture}.AppImage",
+            APPIMAGETOOL_SHA256[architecture],
+        ),
+        f"runtime-{architecture}": (
+            f"https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-{architecture}",
+            RUNTIME_SHA256[architecture],
+        ),
+        "runtime-LICENSE": (
+            "https://raw.githubusercontent.com/AppImage/type2-runtime/20251108/LICENSE",
+            "aa154fc9070614bbe7921f89db11efd1dba7a1f3a41685958110e2230f9c0ca1",
+        ),
+    }
 
 
 def download_verified(url, digest, target):
@@ -58,8 +82,7 @@ def copy(source, destination, executable=False):
 
 
 def build(source, output, work):
-    if sys.platform != "linux" or platform.machine() != "x86_64":
-        raise RuntimeError("This build target requires Linux x86_64")
+    architecture = native_architecture()
     libc, libc_version = platform.libc_ver()
     if libc != "glibc" or tuple(map(int, libc_version.split(".")[:2])) > (2, 36):
         raise RuntimeError("Build on Debian 12 / glibc 2.36 or older to preserve AppImage compatibility")
@@ -68,7 +91,7 @@ def build(source, output, work):
         raise RuntimeError(f"Install PyInstaller=={PYINSTALLER_VERSION}; found {version}")
     import tkinter  # Fail early if the build interpreter cannot bundle Tcl/Tk.
 
-    for name, (url, digest) in DOWNLOADS.items():
+    for name, (url, digest) in downloads_for(architecture).items():
         download_verified(url, digest, work / name)
     tool = work / "appimagetool.AppImage"
     tool.chmod(0o755)
@@ -107,16 +130,17 @@ def build(source, output, work):
     for item in appdir.rglob("*"):
         if not item.is_symlink():
             item.chmod(0o755 if item.is_dir() else item.stat().st_mode | 0o444)
-    artifact = output / ARTIFACT
-    environment = dict(os.environ, ARCH="x86_64", VERSION=VERSION)
+    artifact_name = f"flash-usb-{VERSION}-{architecture}.AppImage"
+    artifact = output / artifact_name
+    environment = dict(os.environ, ARCH=architecture, VERSION=VERSION)
     subprocess.run([
-        str(tool), "--appimage-extract-and-run", "--runtime-file", str(work / "runtime-x86_64"),
+        str(tool), "--appimage-extract-and-run", "--runtime-file", str(work / f"runtime-{architecture}"),
         "--mksquashfs-opt", "-processors", "--mksquashfs-opt", "2",
         str(appdir), str(artifact),
     ], check=True, env=environment, cwd=work)
     artifact.chmod(0o755)
     checksum = hashlib.sha256(artifact.read_bytes()).hexdigest()
-    (output / (ARTIFACT + ".sha256")).write_text(f"{checksum}  {ARTIFACT}\n", encoding="utf-8")
+    (output / (artifact_name + ".sha256")).write_text(f"{checksum}  {artifact_name}\n", encoding="utf-8")
     print(artifact)
     return artifact
 

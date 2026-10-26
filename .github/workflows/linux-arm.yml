@@ -1,0 +1,177 @@
+name: Linux ARM64
+
+on:
+  push:
+    branches: [linux-support]
+    tags: ['linux-arm-v*-linux*']
+    paths:
+      - packaging/appimage/**
+      - прога/linux_*.py
+      - tests/**
+      - .github/workflows/linux-arm.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build native aarch64 AppImage
+        run: |
+          test "$(uname -m)" = aarch64
+          mkdir -p appimage
+          set +e
+          docker run --rm -v "$PWD:/src:ro" -v "$PWD/appimage:/out" -w /src debian:bookworm-slim sh -eu -c '
+            test "$(uname -m)" = aarch64
+            apt-get update
+            DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 python3-tk python3-venv libpython3.11 binutils ca-certificates squashfs-tools file
+            python3 -m venv /opt/build-venv
+            /opt/build-venv/bin/python -m pip install PyInstaller==6.22.3
+            /opt/build-venv/bin/python -m unittest discover -s tests -v
+            /opt/build-venv/bin/python packaging/appimage/build.py --output /out
+            readelf -h /out/flash-usb-v0.2.0-linux.2-aarch64.AppImage
+          ' 2>&1 | tee arm-build.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python3 -c 'from pathlib import Path; t=Path("arm-build.log").read_text(errors="replace")[-3000:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"
+      - name: Verify ARM64 ELF header
+        run: |
+          python3 - <<'PY'
+          import struct
+          from pathlib import Path
+          header = next(Path('appimage').glob('*.AppImage')).read_bytes()[:64]
+          assert header[:5] == b'\x7fELF\x02'
+          assert struct.unpack_from('<H', header, 18)[0] == 183, 'AppImage must be AArch64 ELF'
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-arm64-appimage
+          path: appimage/*.AppImage
+          if-no-files-found: error
+
+  test:
+    needs: build
+    runs-on: ubuntu-24.04-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - distro: Debian 12 ARM64
+            image: debian:bookworm-slim
+            format: deb
+          - distro: Fedora ARM64
+            image: fedora:latest
+            format: rpm
+    name: Validate ${{ matrix.distro }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-arm64-appimage
+          path: appimage
+      - name: Download and verify the existing architecture-independent installers
+        run: |
+          mkdir -p installers
+          cd installers
+          base=https://github.com/newmokee-gif/flash_usb_4_windows/releases/download/v0.2.0-linux.2
+          curl -fL "$base/flash-usb_0.2.0.linux.2_all.deb" -o flash-usb_0.2.0.linux.2_all.deb
+          curl -fL "$base/flash-usb-0.2.0-0.2.linux.noarch.rpm" -o flash-usb-0.2.0-0.2.linux.noarch.rpm
+          curl -fL "$base/SHA256SUMS-packages.txt" -o SHA256SUMS-packages.txt
+          sha256sum -c SHA256SUMS-packages.txt
+      - name: Run AppImage, install existing package, test and uninstall
+        env:
+          IMAGE: ${{ matrix.image }}
+          FORMAT: ${{ matrix.format }}
+        run: |
+          test "$(uname -m)" = aarch64
+          chmod 755 appimage/*.AppImage
+          set +e
+          docker run --rm -v "$PWD:/src:ro" -v "$PWD/appimage:/app:ro" -v "$PWD/installers:/packages:ro" -w /src -e FORMAT "$IMAGE" sh -eu -c '
+            test "$(uname -m)" = aarch64
+            if [ "$FORMAT" = deb ]; then
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends xvfb fonts-dejavu-core util-linux mount parted dosfstools wimtools udev pkexec libxft2 libxrender1 libxss1
+              if command -v python3; then echo "Expected Python-free ARM64 runtime"; exit 1; fi
+            else
+              dnf install -y xorg-x11-server-Xvfb dejavu-sans-fonts util-linux parted dosfstools wimlib-utils systemd-udev polkit libXft libXrender libXScrnSaver
+            fi
+            Xvfb :99 -screen 0 1024x768x24 -nolisten tcp &
+            xvfb_pid=$!
+            trap "kill $xvfb_pid" EXIT
+            export DISPLAY=:99 PYTHONDONTWRITEBYTECODE=1
+            app=/app/flash-usb-v0.2.0-linux.2-aarch64.AppImage
+            runuser -u nobody -- "$app" --appimage-extract-and-run check
+            runuser -u nobody -- "$app" --appimage-extract-and-run list
+            runuser -u nobody -- "$app" --appimage-extract-and-run --self-test
+            "$app" --appimage-extract-and-run --self-test
+            if [ "$FORMAT" = deb ]; then
+              DEBIAN_FRONTEND=noninteractive apt-get install -y /packages/*.deb desktop-file-utils
+            else
+              dnf install -y /packages/*.rpm desktop-file-utils
+              rpm -V flash-usb
+            fi
+            desktop-file-validate /usr/share/applications/flash-usb.desktop
+            python3 tests/smoke_installed_package.py
+            python3 -m unittest discover -s tests -v
+            mkdir /tmp/wim-fixture
+            for part in a b c; do dd if=/dev/urandom of=/tmp/wim-fixture/$part bs=1M count=1 status=none; done
+            wimlib-imagex capture /tmp/wim-fixture /tmp/fixture.wim --compress=none --check
+            wimlib-imagex split /tmp/fixture.wim /tmp/install.swm 1 --check
+            wimlib-imagex verify /tmp/install.swm --ref=/tmp/install\*.swm
+            if [ "$FORMAT" = deb ]; then apt-get remove -y flash-usb; else dnf remove -y flash-usb; fi
+            test ! -e /usr/bin/flash-usb
+          ' 2>&1 | tee arm-test.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python3 -c 'from pathlib import Path; t=Path("arm-test.log").read_text(errors="replace")[-3000:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/linux-arm-v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: linux-arm64-appimage
+          path: appimage
+      - name: Add ARM64 AppImage to existing release
+        working-directory: appimage
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          release="${GITHUB_REF_NAME#linux-arm-}"
+          gh release view "$release"
+          sha256sum *.AppImage > SHA256SUMS-AppImage-aarch64.txt
+          gh release upload "$release" *.AppImage SHA256SUMS-AppImage-aarch64.txt
+          gh release view "$release" --json body --jq .body > release-notes.md
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          p=Path('release-notes.md')
+          p.write_text(p.read_text()+'''
+
+          ## Linux ARM64 / AArch64
+
+          ARM64 AppImage: `flash-usb-v0.2.0-linux.2-aarch64.AppImage` (glibc 2.36+, Debian 12+/Fedora ARM64).
+          Run `chmod +x flash-usb-v0.2.0-linux.2-aarch64.AppImage`, then launch it; without FUSE use `--appimage-extract-and-run`.
+          Python/Tk are bundled; system disk tools remain required as listed above.
+          The existing `.deb` (all) and `.rpm` (noarch) also passed installation, GUI/CLI, WIM and uninstall checks on native ARM64 runners.
+          AppImage GUI/process restart passed without host Python on Debian ARM64. Checksums: `SHA256SUMS-AppImage-aarch64.txt`.
+          ARM64 host support is independent of the Windows ISO target architecture; real USB writing/boot remains untested.
+          Arch Linux ARM and 32-bit ARM are not validated by these builds.
+          '''+f'\nARM packaging source commit: `{os.environ["GITHUB_SHA"]}`.\n')
+          PY
+          gh release edit "$release" --notes-file release-notes.md

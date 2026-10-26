@@ -3,6 +3,7 @@ import ctypes
 from ctypes import wintypes
 import json
 import os
+import platform
 import re
 import shutil
 import subprocess
@@ -59,6 +60,29 @@ kernel32.GetLastError.argtypes = []
 kernel32.GetLastError.restype = wintypes.DWORD
 
 INVALID_HANDLE_VALUES = (None, -1, 0xFFFFFFFF, 0xFFFFFFFFFFFFFFFF, ctypes.c_void_p(-1).value)
+
+
+def is_arm64_host():
+    machine = os.environ.get("PROCESSOR_ARCHITEW6432") or platform.machine()
+    return machine.lower() in ("arm64", "aarch64")
+
+
+def windows_iso_architecture(choice):
+    return "ARM64" if "ARM64" in choice.upper() else "x64"
+
+
+def is_arm64_executable(path):
+    """Reject cached/emulated x64 helpers when running on Windows ARM64."""
+    try:
+        with open(path, "rb") as stream:
+            if stream.read(2) != b"MZ":
+                return False
+            stream.seek(0x3C)
+            offset = int.from_bytes(stream.read(4), "little")
+            stream.seek(offset)
+            return stream.read(6) == b"PE\0\0\x64\xaa"
+    except (OSError, ValueError):
+        return False
 
 
 def is_admin():
@@ -200,14 +224,14 @@ class WindowsOneClickUSB:
 
         self.work_dir = create_unique_iso_folder("C:\\", "iso_files")
         self.tools_dir = os.path.join(
-            os.environ.get("TEMP", "C:\\Temp"), "win_usb_tools"
+            os.environ.get("TEMP", "C:\\Temp"), "win_usb_tools_arm64" if is_arm64_host() else "win_usb_tools"
         )
         os.makedirs(self.tools_dir, exist_ok=True)
 
         self.iso_path = tk.StringVar()
         self.torrent_source = tk.StringVar()
         self.selected_drive = tk.StringVar()
-        self.win_version = tk.StringVar(value="Windows 11 (64-bit Русская)")
+        self.win_version = tk.StringVar(value="Windows 11 (ARM64 Русская)" if is_arm64_host() else "Windows 11 (64-bit Русская)")
         self.auto_write_var = tk.BooleanVar(value=True)
         self.check_usb_var = tk.BooleanVar(value=True)
         self.drives_map = {}
@@ -325,6 +349,8 @@ class WindowsOneClickUSB:
                 "Windows 11 (64-bit Русская)",
                 "Windows 10 (64-bit Русская)",
                 "Windows 11 (64-bit English)",
+                "Windows 11 (ARM64 Русская)",
+                "Windows 11 (ARM64 English)",
             ],
         )
         self.ver_combo.pack(side="left", padx=(0, 5), ipady=3)
@@ -688,7 +714,7 @@ class WindowsOneClickUSB:
                 "-Lang",
                 lang,
                 "-Arch",
-                "x64",
+                windows_iso_architecture(choice),
                 "-GetUrl",
             ],
             timeout=60,
@@ -708,12 +734,19 @@ class WindowsOneClickUSB:
 
     def ensure_aria2(self):
         sys_aria = shutil.which("aria2c")
-        if sys_aria:
+        if sys_aria and (not is_arm64_host() or is_arm64_executable(sys_aria)):
             return sys_aria
 
         local_aria = os.path.join(self.tools_dir, "aria2c.exe")
-        if os.path.exists(local_aria):
+        if os.path.exists(local_aria) and (not is_arm64_host() or is_arm64_executable(local_aria)):
             return local_aria
+
+        if is_arm64_host():
+            raise RuntimeError(
+                "Для загрузки ISO/торрентов на Windows ARM64 нужен нативный aria2c ARM64 в PATH.\n"
+                "Автоматическая загрузка x64-клиента отключена. "
+                "Можно скачать официальный Windows ARM64 ISO в браузере и выбрать его для записи."
+            )
 
         self.update_status("Скачивание фонового клиента aria2c (2.3 МБ)...", "blue")
         zip_path = os.path.join(self.tools_dir, "aria2.zip")
@@ -1166,7 +1199,7 @@ class WindowsOneClickUSB:
 
             # 4. Записываем загрузочный сектор Legacy BIOS (с флагом /force, чтобы избежать блокировок)
             bootsect_exe = os.path.join(iso_root, "boot", "bootsect.exe")
-            if os.path.exists(bootsect_exe):
+            if os.path.exists(bootsect_exe) and not os.path.exists(os.path.join(iso_root, "efi", "boot", "bootaa64.efi")):
                 run_cmd(
                     [
                         bootsect_exe,
@@ -1193,7 +1226,7 @@ class WindowsOneClickUSB:
                 f"Загрузочная флешка Windows полностью готова за {time_str}!\n\n"
                 f"• Основной раздел с установщиком (NTFS): {data_root}\n"
                 f"• Раздел загрузчика UEFI: {boot_root}\n\n"
-                f"Флешка готова к установке как в режиме UEFI, так и в Legacy BIOS.",
+                f"Флешка подготовлена для UEFI. Legacy BIOS применим только к совместимым x86/x64 образам.",
             )
         finally:
             if iso_root:
