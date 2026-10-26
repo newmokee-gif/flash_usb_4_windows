@@ -22,9 +22,9 @@ class InstallerTests(unittest.TestCase):
     def test_prominent_manager_buttons_keep_clear_names(self):
         for system, name in (("win32", "WinGet"), ("darwin", "Homebrew")):
             buttons = self.make_buttons(system)
-            self.assertEqual(buttons[0]["text"], f"Установить {name}")
+            self.assertEqual(buttons[0]["text"], f"Install {name}")
             self.assertEqual(buttons[0]["style"], "Setup.TButton")
-            self.assertEqual(buttons[1]["text"], "Проверить")
+            self.assertEqual(buttons[1]["text"], "Check")
 
     def test_busy_operation_does_not_start_installation(self):
         buttons = self.make_buttons("win32", busy=True)

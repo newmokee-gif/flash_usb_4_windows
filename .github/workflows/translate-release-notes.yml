@@ -1,0 +1,27 @@
+name: Translate documented release notes
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs/releases/**
+      - scripts/translate_release_notes.py
+      - .github/workflows/translate-release-notes.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: translate-release-notes
+  cancel-in-progress: false
+jobs:
+  translate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - run: python -m unittest discover -s tests -q
+      - name: Update titles and descriptions without changing binaries or visibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: python scripts/translate_release_notes.py

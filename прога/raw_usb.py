@@ -517,18 +517,18 @@ def _copy_and_verify(source, target, size, digest, log):
         remaining -= len(block)
     _require(copied.hexdigest() == digest, "Source image changed during writing")
     target.flush()
-    log("Запись завершена. Повторное чтение и проверка SHA-256…")
+    log("Writing complete. Reading back and verifying SHA-256…")
     target.seek(0)
     _require(_digest(target, size) == digest, "USB readback checksum mismatch")
 
 
 def write_image(image, path, confirmation, expected_identity, expected_sha256, log=print):
-    _require(_admin(), "Запись требует прав администратора")
-    _require(confirmation == path, "Подтверждение должно точно совпадать с путём USB")
-    _require(isinstance(expected_sha256, str) and re.fullmatch(r"[a-fA-F0-9]{64}", expected_sha256), "Требуется проверенная SHA-256 образа")
+    _require(_admin(), "Writing requires administrator privileges")
+    _require(confirmation == path, "Confirmation must exactly match the USB path")
+    _require(isinstance(expected_sha256, str) and re.fullmatch(r"[a-fA-F0-9]{64}", expected_sha256), "A verified image SHA-256 is required")
     _require(bool(expected_identity), "USB identity is required")
     source_path = Path(image).expanduser()
-    _require(not source_path.is_symlink() and source_path.suffix.lower() in (".iso", ".img"), "Выберите обычный распакованный .iso/.img, не архив или ссылку")
+    _require(not source_path.is_symlink() and source_path.suffix.lower() in (".iso", ".img"), "Select a regular uncompressed .iso/.img file, not an archive or symbolic link")
     device = _target(path)
     _require(device.identity == _tuple(expected_identity), "USB changed since selection")
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_BINARY", 0)
@@ -543,34 +543,34 @@ def write_image(image, path, confirmation, expected_identity, expected_sha256, l
             _require(stat.S_ISREG(metadata.st_mode) and metadata.st_size > 0, "Source is not a nonempty regular image file")
             sector = device.identity[5] if sys.platform == "win32" else 512
             _require(metadata.st_size % sector == 0, "Image length is not aligned to device sectors")
-            _require(metadata.st_size <= device.size, "Образ не помещается на выбранный USB")
+            _require(metadata.st_size <= device.size, "The image does not fit on the selected USB drive")
             if sys.platform != "win32":
                 _require(metadata.st_dev != os.stat(device.path).st_rdev, "Source image is stored on target USB")
             # Optical-only ISOs cannot become bootable by raw USB copying.
             header = source.read(512)
-            _require(header[510:512] == b"\x55\xaa" and any(header[446:510]), "Образ не содержит гибридную MBR-разметку для записи на USB")
+            _require(header[510:512] == b"\x55\xaa" and any(header[446:510]), "The image has no hybrid MBR partition table for USB writing")
             source.seek(0)
-            log("Проверка SHA-256 исходного образа до записи…")
+            log("Verifying the source image SHA-256 before writing…")
             digest = _digest(source, metadata.st_size)
-            _require(digest == expected_sha256.lower(), "SHA-256 исходного образа не совпадает; запись отменена")
+            _require(digest == expected_sha256.lower(), "Source image SHA-256 mismatch; writing cancelled")
             _require(_source_state(os.fstat(source.fileno())) == _source_state(metadata), "Source image changed during validation")
             _same(device)
             with _open_disk(device) as target:
                 _require(metadata.st_size % target.sector == 0, "Image length is not aligned to physical USB sectors")
                 _require(_source_state(os.fstat(source.fileno())) == _source_state(metadata), "Source image changed before writing")
-                log("Побайтовая запись GNU/Linux-образа…")
+                log("Writing the GNU/Linux image byte for byte…")
                 _copy_and_verify(source, target, metadata.st_size, digest, log)
                 _require(_source_state(os.fstat(source.fileno())) == _source_state(metadata), "Source image changed during writing")
                 # Windows may cache LastWriteTime while a file handle remains
                 # open. Metadata and the bytes already copied are not proof
                 # that the source remained unchanged after its last read.
                 # Rehash the same unbuffered descriptor; never reopen a path.
-                log("Повторная проверка SHA-256 исходного файла…")
+                log("Rechecking the source file SHA-256…")
                 source.seek(0)
                 _require(_digest(source, metadata.st_size) == digest and not source.read(1),
                          "Source image changed during writing (post-write SHA-256 mismatch)")
                 _require(_source_state(os.fstat(source.fileno())) == _source_state(metadata), "Source image changed during final validation")
-            log("Готово. SHA-256 записанных данных совпадает с исходным образом.")
+            log("Done. The written data SHA-256 matches the source image.")
     finally:
         if fd is not None:
             os.close(fd)
@@ -593,7 +593,7 @@ def main(argv=None):
         else:
             write_image(args.image, args.device, args.confirm, json.loads(args.expected_identity), args.sha256)
     except (USBError, OSError, ValueError) as exc:
-        print(f"Ошибка: {exc}", file=sys.stderr)
+        print(f"Error: {exc}", file=sys.stderr)
         return 1
     return 0
 

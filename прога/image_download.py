@@ -46,7 +46,7 @@ def value(image, key, default=None):
 def https_url(url):
     parsed = urllib.parse.urlsplit(url)
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
-        raise DownloadError("Источник должен быть официальной HTTPS-ссылкой.")
+        raise DownloadError("The source must be an official HTTPS URL.")
     return url
 
 
@@ -58,7 +58,7 @@ class HTTPSRedirect(urllib.request.HTTPRedirectHandler):
 
 def _cancelled(event):
     if event is not None and event.is_set():
-        raise Cancelled("Загрузка отменена. Запись USB не начиналась.")
+        raise Cancelled("Download cancelled. USB writing has not started.")
 
 
 def fetch(url, destination=None, *, cancelled=None, limit=None, log=lambda _: None):
@@ -86,15 +86,15 @@ def fetch(url, destination=None, *, cancelled=None, limit=None, log=lambda _: No
                     break
                 total += len(chunk)
                 if limit is not None and total > limit:
-                    raise DownloadError("Метаданные источника превышают допустимый размер.")
+                    raise DownloadError("Source metadata exceeds the size limit.")
                 if stream:
                     stream.write(chunk)
                 else:
                     chunks.append(chunk)
                 if stream and total % (64 * 1024 * 1024) < len(chunk):
-                    log(f"Получено {total // (1024 * 1024)} МиБ")
+                    log(f"Received {total // (1024 * 1024)} MiB")
         if total == 0:
-            raise DownloadError("Источник вернул пустой файл.")
+            raise DownloadError("The source returned an empty file.")
         return b"".join(chunks) if destination is None else total
     finally:
         if stream:
@@ -105,7 +105,7 @@ def checksum_from_manifest(text, filename, algorithm="sha256"):
     """Accept GNU/BSD checksum formats, including clear-signed checksum text."""
     length = {"sha256": 64, "sha512": 128}.get(algorithm.lower())
     if length is None:
-        raise DownloadError("Поддерживаются контрольные суммы SHA-256 и SHA-512.")
+        raise DownloadError("SHA-256 and SHA-512 checksums are supported.")
     found = set()
     bare = []
     for line in text.splitlines():
@@ -123,21 +123,21 @@ def checksum_from_manifest(text, filename, algorithm="sha256"):
     if not found and len(text.splitlines()) == 1 and len(bare) == 1:
         found.add(bare[0])
     if len(found) != 1:
-        raise DownloadError(f"Не найдена однозначная {algorithm.upper()} для {filename}.")
+        raise DownloadError(f"Could not find an unambiguous {algorithm.upper()} for {filename}.")
     return found.pop()
 
 
 def _safe_part(part):
     if not isinstance(part, bytes):
-        raise DownloadError("Неверный путь в torrent.")
+        raise DownloadError("Invalid torrent path.")
     try:
         name = part.decode("utf-8")
     except UnicodeError as exc:
-        raise DownloadError("Путь torrent должен быть UTF-8.") from exc
+        raise DownloadError("The torrent path must be UTF-8.") from exc
     if (name in ("", ".", "..") or name.endswith((".", " "))
             or any(ord(c) < 32 or c in '<>:"/\\|?*' for c in name)
             or re.match(r"^(CON|PRN|AUX|NUL|CONIN\$|CONOUT\$|CLOCK\$|COM[1-9¹²³]|LPT[1-9¹²³])(?:\.|$)", name, re.I)):
-        raise DownloadError("Небезопасный путь в torrent.")
+        raise DownloadError("Unsafe torrent path.")
     return name
 
 
@@ -147,7 +147,7 @@ def _bdecode(data):
     def read(depth=0):
         nonlocal index
         if depth > 32 or index >= len(data):
-            raise DownloadError("Повреждённый torrent.")
+            raise DownloadError("Corrupt torrent.")
         marker = data[index:index + 1]
         if marker in (b"d", b"l"):
             index += 1
@@ -156,38 +156,38 @@ def _bdecode(data):
                 item = read(depth + 1)
                 if isinstance(result, dict):
                     if not isinstance(item, bytes) or item in result:
-                        raise DownloadError("Повторяющийся ключ в torrent.")
+                        raise DownloadError("Duplicate torrent key.")
                     result[item] = read(depth + 1)
                 else:
                     result.append(item)
             if index >= len(data):
-                raise DownloadError("Повреждённый torrent.")
+                raise DownloadError("Corrupt torrent.")
             index += 1
             return result
         if marker == b"i":
             end = data.find(b"e", index)
             if end < 0:
-                raise DownloadError("Повреждённый torrent.")
+                raise DownloadError("Corrupt torrent.")
             try:
                 number = int(data[index + 1:end])
             except ValueError as exc:
-                raise DownloadError("Повреждённый torrent.") from exc
+                raise DownloadError("Corrupt torrent.") from exc
             index = end + 1
             return number
         colon = data.find(b":", index)
         if colon < 0 or not data[index:colon].isdigit():
-            raise DownloadError("Повреждённый torrent.")
+            raise DownloadError("Corrupt torrent.")
         length = int(data[index:colon])
         index = colon + 1
         if index + length > len(data):
-            raise DownloadError("Повреждённый torrent.")
+            raise DownloadError("Corrupt torrent.")
         result = data[index:index + length]
         index += length
         return result
 
     result = read()
     if index != len(data):
-        raise DownloadError("Лишние данные в torrent.")
+        raise DownloadError("Trailing data in torrent.")
     return result
 
 
@@ -196,38 +196,38 @@ def torrent_target(data, filename):
     root = _bdecode(data)
     info = root.get(b"info") if isinstance(root, dict) else None
     if not isinstance(info, dict) or b"symlink path" in info or b"l" in info.get(b"attr", b""):
-        raise DownloadError("Неподдерживаемый torrent.")
+        raise DownloadError("Unsupported torrent.")
     names = [_safe_part(info[key]) for key in (b"name", b"name.utf-8") if key in info]
     if not names or len(set(names)) != 1:
-        raise DownloadError("Неоднозначное имя torrent.")
+        raise DownloadError("Ambiguous torrent name.")
     name = names[0]
     files = info.get(b"files")
     if files is None:
         if name != filename or not isinstance(info.get(b"length"), int) or info[b"length"] <= 0:
-            raise DownloadError("Torrent не содержит выбранный образ.")
+            raise DownloadError("The torrent does not contain the selected image.")
         return Path(name), None
     if not isinstance(files, list) or not files or len(files) > 10000:
-        raise DownloadError("Неподдерживаемый torrent.")
+        raise DownloadError("Unsupported torrent.")
     matches = []
     seen = set()
     for index, entry in enumerate(files, 1):
         if not isinstance(entry, dict) or b"symlink path" in entry or b"l" in entry.get(b"attr", b""):
-            raise DownloadError("Ссылки в torrent не поддерживаются.")
+            raise DownloadError("Links in torrents are not supported.")
         variants = [entry[key] for key in (b"path", b"path.utf-8") if key in entry]
         if not variants or any(not isinstance(parts, list) or not parts for parts in variants):
-            raise DownloadError("Неверный путь torrent.")
+            raise DownloadError("Invalid torrent path.")
         decoded = [tuple(_safe_part(part) for part in parts) for parts in variants]
         if len(set(decoded)) != 1:
-            raise DownloadError("Неоднозначный путь torrent.")
+            raise DownloadError("Ambiguous torrent path.")
         parts = decoded[0]
         path = Path(name, *parts)
         if str(path).casefold() in seen:
-            raise DownloadError("Повторяющиеся пути torrent.")
+            raise DownloadError("Duplicate torrent paths.")
         seen.add(str(path).casefold())
         if parts[-1] == filename:
             matches.append((path, index))
     if len(matches) != 1:
-        raise DownloadError("Torrent не содержит однозначно выбранный образ.")
+        raise DownloadError("The torrent does not uniquely identify the selected image.")
     return matches[0]
 
 
@@ -285,10 +285,10 @@ def download_torrent(url, filename, directory, aria, *, cancelled=None):
                 process.communicate()
             raise
         if process.returncode:
-            raise DownloadError(f"aria2: код {process.returncode}; " + output.decode(errors="replace")[-500:])
+            raise DownloadError(f"aria2: exit code {process.returncode}; " + output.decode(errors="replace")[-500:])
     result = directory / relative
     if not result.is_file() or result.is_symlink() or directory.resolve() not in result.resolve().parents:
-        raise DownloadError("aria2 не создал ожидаемый образ.")
+        raise DownloadError("aria2 did not create the expected image.")
     return result
 
 
@@ -310,7 +310,7 @@ def file_hashes(path, algorithm, *, cancelled=None):
         after = os.fstat(source.fileno())
         identity = lambda stat: (stat.st_dev, stat.st_ino, stat.st_size, stat.st_mtime_ns, stat.st_ctime_ns)
         if identity(before) != identity(after):
-            raise DownloadError("Образ изменился во время проверки.")
+            raise DownloadError("The image changed during verification.")
     return {name: digest.hexdigest() for name, digest in digests.items()}
 
 
@@ -368,14 +368,14 @@ def find_aria2():
 def ensure_windows_aria2(*, log=lambda _: None, cancelled=None, allow_emulation=False):
     """Provision the exact upstream helper; the ARM64 application stays native."""
     if sys.platform != "win32":
-        raise DownloadError("Автоматическая установка этого aria2 доступна только в Windows.")
+        raise DownloadError("Automatic installation of this aria2 build is available only on Windows.")
     native = find_aria2()
     if native:
         return native
     if windows_arm64():
         if not allow_emulation or sys.getwindowsversion().build < 22000:
-            raise DownloadError("Нативный aria2 ARM64 не найден; x64-помощник требует согласия и Windows 11 ARM64.")
-        log("aria2 x64 будет работать через эмуляцию Windows 11 ARM64; само приложение остаётся ARM64.")
+            raise DownloadError("Native aria2 ARM64 was not found; the x64 helper requires consent and Windows 11 ARM64.")
+        log("aria2 x64 will run under Windows 11 ARM64 emulation; the application itself remains ARM64.")
     cache = Path(os.environ.get("LOCALAPPDATA", tempfile.gettempdir())) / "WinUSB Creator/tools/aria2/1.37.0-x64"
     cache.mkdir(parents=True, exist_ok=True)
     executable = cache / "aria2c.exe"
@@ -388,26 +388,26 @@ def ensure_windows_aria2(*, log=lambda _: None, cancelled=None, allow_emulation=
                 and file_hash(executable, "sha256", cancelled=cancelled) == ARIA2_X64_EXE_SHA256)
 
     if verified_cache():
-        log("Проверен сохранённый aria2 1.37.0 (SHA-256 архива и EXE).")
+        log("Cached aria2 1.37.0 verified (archive and EXE SHA-256).")
         return str(executable)
-    log("Установка встроенного torrent-помощника aria2 из официального выпуска GitHub…")
+    log("Installing the bundled aria2 torrent helper from its official GitHub release…")
     with tempfile.TemporaryDirectory(prefix=".aria2-", dir=cache) as work:
         directory = Path(work)
         archive_path = directory / "upstream.zip"
         fetch(ARIA2_X64_URL, archive_path, cancelled=cancelled, limit=16 * 1024 * 1024)
         if file_hash(archive_path, "sha256", cancelled=cancelled) != ARIA2_X64_ARCHIVE_SHA256:
-            raise DownloadError("SHA-256 архива aria2 не совпадает; запуск запрещён.")
+            raise DownloadError("aria2 archive SHA-256 mismatch; execution blocked.")
         with zipfile.ZipFile(archive_path) as archive:
             if archive.namelist().count(ARIA2_X64_MEMBER) != 1:
-                raise DownloadError("В архиве нет однозначного aria2c.exe.")
+                raise DownloadError("The archive does not contain a unique aria2c.exe.")
             content = archive.read(ARIA2_X64_MEMBER)
             if hashlib.sha256(content).hexdigest() != ARIA2_X64_EXE_SHA256:
-                raise DownloadError("SHA-256 aria2c.exe не совпадает; запуск запрещён.")
+                raise DownloadError("aria2c.exe SHA-256 mismatch; execution blocked.")
             if len(content) < 64 or content[:2] != b"MZ":
-                raise DownloadError("Неверный PE aria2c.exe.")
+                raise DownloadError("Invalid aria2c.exe PE executable.")
             offset = struct.unpack_from("<I", content, 0x3C)[0]
             if content[offset:offset + 6] != b"PE\0\0\x64\x86":
-                raise DownloadError("Неверная архитектура aria2c.exe.")
+                raise DownloadError("Incorrect aria2c.exe architecture.")
             staged = directory / "aria2c.exe"
             staged.write_bytes(content)
             for filename in ("COPYING", "LICENSE.OpenSSL", "README.mingw"):
@@ -416,7 +416,7 @@ def ensure_windows_aria2(*, log=lambda _: None, cancelled=None, allow_emulation=
         os.replace(archive_path, archive_cache)
         os.replace(staged, executable)
     if not verified_cache():
-        raise DownloadError("Повторная проверка установленного aria2 не прошла.")
+        raise DownloadError("Installed aria2 failed verification.")
     return str(executable)
 
 
@@ -426,7 +426,7 @@ def download_image(image, destination, *, log=lambda _: None, cancelled=None,
     filename = value(image, "filename") or value(image, "image_name") or urllib.parse.unquote(PurePosixPath(urllib.parse.urlsplit(image_url).path).name)
     _safe_part(filename.encode("utf-8"))
     if not filename.lower().endswith((".iso", ".img")):
-        raise DownloadError("Для записи нужен несжатый гибридный .iso или .img.")
+        raise DownloadError("Writing requires an uncompressed hybrid .iso or .img.")
     algorithm = value(image, "checksum_algorithm", "sha256").lower()
     digest = value(image, "sha256")
     if digest:
@@ -439,13 +439,13 @@ def download_image(image, destination, *, log=lambda _: None, cancelled=None,
         digest = checksum_from_manifest(manifest.decode("utf-8-sig"), filename, algorithm)
     expected_length = {"sha256": 64, "sha512": 128}.get(algorithm)
     if expected_length is None or re.fullmatch(rf"[0-9a-fA-F]{{{expected_length}}}", digest or "") is None:
-        raise DownloadError("Нет действительной контрольной суммы официального источника.")
+        raise DownloadError("No valid checksum from the official source.")
     destination = Path(destination).expanduser().resolve()
     if not destination.is_dir():
-        raise DownloadError("Выберите существующую папку для загрузки.")
+        raise DownloadError("Select an existing download folder.")
     target = destination / filename
     if target.exists():
-        raise DownloadError("Такой файл уже существует. Выберите другую папку или локальный образ.")
+        raise DownloadError("This file already exists. Select another folder or use a local image.")
     with tempfile.TemporaryDirectory(prefix=".winusb-download-", dir=destination) as work:
         directory = Path(work)
         torrent = value(image, "torrent_url")
@@ -456,27 +456,27 @@ def download_image(image, destination, *, log=lambda _: None, cancelled=None,
             except Cancelled:
                 raise
             except (DownloadError, OSError, zipfile.BadZipFile) as exc:
-                log(f"Не удалось подготовить torrent-помощник: {exc}. Используется официальный HTTPS-источник.")
+                log(f"Could not prepare the torrent helper: {exc}. Using the official HTTPS source.")
         downloaded = None
         if torrent and aria:
-            log("Загрузка официального torrent через aria2. Раздача после загрузки отключена.")
+            log("Downloading the official torrent with aria2. Seeding after download is disabled.")
             try:
                 downloaded = download_torrent(torrent, filename, directory, aria, cancelled=cancelled)
             except Cancelled:
                 raise
             except (DownloadError, OSError) as exc:
-                log(f"Torrent недоступен: {exc}. Используется официальный HTTPS-источник.")
+                log(f"Torrent unavailable: {exc}. Using the official HTTPS source.")
         elif torrent:
-            log("aria2c не найден: используется официальный HTTPS-источник.")
+            log("aria2c was not found: using the official HTTPS source.")
         if downloaded is None:
-            log("Загрузка образа с официального HTTPS-источника.")
+            log("Downloading the image from the official HTTPS source.")
             downloaded = directory / "direct-image"
             fetch(image_url, downloaded, cancelled=cancelled, log=log)
-        log(f"Проверка {algorithm.upper()} перед записью…")
+        log(f"Verifying {algorithm.upper()} before writing…")
         hashes = file_hashes(downloaded, algorithm, cancelled=cancelled)
         actual = hashes[algorithm]
         if actual.lower() != digest.lower():
-            raise DownloadError("Контрольная сумма образа не совпадает. Запись запрещена.")
+            raise DownloadError("Image checksum mismatch. Writing is blocked.")
         _cancelled(cancelled)
         # Atomic exclusive publication: no replacement of a user's existing file.
         created = False
@@ -502,10 +502,10 @@ def download_image(image, destination, *, log=lambda _: None, cancelled=None,
             # same bytes, including when the source was swapped before publish.
             published = file_hashes(target, algorithm, cancelled=cancelled)
             if published[algorithm] != digest.lower() or published["sha256"] != hashes["sha256"]:
-                raise DownloadError("Сохранённый образ изменился. Запись запрещена.")
+                raise DownloadError("The saved image changed. Writing is blocked.")
         except BaseException:
             if created:
                 target.unlink(missing_ok=True)
             raise
-        log(f"Образ проверен и сохранён: {target}")
+        log(f"Image verified and saved: {target}")
         return DownloadResult(target, published["sha256"])

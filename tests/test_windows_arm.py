@@ -36,9 +36,9 @@ class WindowsARMTests(unittest.TestCase):
             self.assertFalse(NAMESPACE["is_arm64_host"]())
 
     def test_iso_architecture_is_independent_of_host(self):
-        for choice in ("Windows 11 (ARM64 Русская)", "Windows 11 (ARM64 English)"):
+        for choice in ("Windows 11 (ARM64 Russian)", "Windows 11 (ARM64 English)"):
             self.assertEqual(NAMESPACE["windows_iso_architecture"](choice), "ARM64")
-        self.assertEqual(NAMESPACE["windows_iso_architecture"]("Windows 11 (64-bit Русская)"), "x64")
+        self.assertEqual(NAMESPACE["windows_iso_architecture"]("Windows 11 (64-bit Russian)"), "x64")
 
     def test_windows_10_has_four_real_language_architecture_variants(self):
         variants = {name: values for name, values in NAMESPACE["WINDOWS_ISO_CHOICES"].items()
@@ -53,7 +53,7 @@ class WindowsARMTests(unittest.TestCase):
             self.assertEqual(NAMESPACE["windows_iso_architecture"](choice), expected[2])
 
     def test_invalid_windows_choice_never_defaults_to_another_iso(self):
-        for choice in ("", "Windows 10 (ARM64 Русская)", "Windows 11 (32-bit English)", "Windows 12"):
+        for choice in ("", "Windows 10 (ARM64 Russian)", "Windows 11 (32-bit English)", "Windows 12"):
             with self.subTest(choice=choice), self.assertRaises(ValueError):
                 NAMESPACE["windows_iso_parameters"](choice)
 

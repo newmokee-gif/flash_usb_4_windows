@@ -57,7 +57,7 @@ def self_test():
                     found.append(str(child.cget("text")))
                 found.extend(labels(child))
             return found
-        if not {"виндовс", "гну/линукс"}.issubset({text.casefold() for text in labels(root)}):
+        if not {"windows", "gnu/linux"}.issubset({text.casefold() for text in labels(root)}):
             raise RuntimeError("Both operating-system choices must be present")
     finally:
         root.destroy()

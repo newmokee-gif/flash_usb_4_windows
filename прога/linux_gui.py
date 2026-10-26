@@ -25,17 +25,17 @@ class LinuxUSB:
         panel = ttk.Frame(root, padding=16)
         panel.pack(fill="both", expand=True)
         ttk.Label(panel, text="Windows ISO → USB (UEFI, FAT32)", font=("sans", 16)).pack(anchor="w")
-        ttk.Label(panel, text="Все данные выбранного USB будут удалены. Legacy BIOS не поддерживается.").pack(anchor="w", pady=8)
+        ttk.Label(panel, text="All data on the selected USB drive will be erased. Legacy BIOS is not supported.").pack(anchor="w", pady=8)
         self.iso = tk.StringVar()
         self.entry = ttk.Entry(panel, textvariable=self.iso)
         self.entry.pack(fill="x")
-        self.browse = ttk.Button(panel, text="Выбрать ISO…", command=self.choose_iso)
+        self.browse = ttk.Button(panel, text="Select ISO…", command=self.choose_iso)
         self.browse.pack(anchor="w", pady=8)
         self.combo = ttk.Combobox(panel, state="readonly")
         self.combo.pack(fill="x")
-        self.refresh_button = ttk.Button(panel, text="Обновить USB", command=self.refresh)
+        self.refresh_button = ttk.Button(panel, text="Refresh USB", command=self.refresh)
         self.refresh_button.pack(anchor="w", pady=8)
-        self.write_button = ttk.Button(panel, text="Записать и проверить", command=self.write)
+        self.write_button = ttk.Button(panel, text="Write and verify", command=self.write)
         self.write_button.pack(anchor="w")
         self.log = tk.Text(panel, height=15, state="disabled", wrap="word")
         self.log.pack(fill="both", expand=True, pady=12)
@@ -63,33 +63,33 @@ class LinuxUSB:
                 self.combo.current(0)
             for device in all_devices:
                 if not device.safe:
-                    self.append(f"Недоступно: {device.path}: {device.reason}")
+                    self.append(f"Unavailable: {device.path}: {device.reason}")
             if not self.devices:
-                self.append("Нет доступных USB. Размонтируйте разделы флешки и обновите список.")
+                self.append("No available USB drives. Unmount the USB partitions and refresh the list.")
         except (USBError, OSError) as exc:
             self.append(str(exc))
 
     def write(self):
         index = self.combo.current()
         if not 0 <= index < len(self.devices):
-            messagebox.showerror("USB", "Выберите доступный USB-накопитель.")
+            messagebox.showerror("USB", "Select an available USB drive.")
             return
         iso = Path(self.iso.get()).expanduser()
         if not self.iso.get() or not iso.is_file():
-            messagebox.showerror("ISO", "Выберите существующий ISO-файл.")
+            messagebox.showerror("ISO", "Select an existing ISO file.")
             return
         missing = self.missing_dependencies()
         if missing:
-            messagebox.showerror("Зависимости", "Установите зависимости из README: " + ", ".join(missing))
+            messagebox.showerror("Dependencies", "Install the dependencies listed in README: " + ", ".join(missing))
             return
         device = self.devices[index]
-        confirmation = simpledialog.askstring("Удаление данных", f"Все данные будут удалены:\n{device.label}\n\nВведите точный путь {device.path} для подтверждения:")
+        confirmation = simpledialog.askstring("Erase data", f"All data will be erased:\n{device.label}\n\nEnter the exact path {device.path} to confirm:")
         if confirmation != device.path:
             return
         try:
             command = self.prepare_write_command(iso, device, confirmation)
         except USBError as exc:
-            messagebox.showerror("Запуск", str(exc))
+            messagebox.showerror("Launch", str(exc))
             return
         self.set_busy(True)
         threading.Thread(target=self.worker, args=(command,), daemon=False).start()
@@ -105,7 +105,7 @@ class LinuxUSB:
         if os.geteuid() != 0:
             pkexec = shutil.which("pkexec", path="/usr/sbin:/usr/bin:/sbin:/bin")
             if not pkexec:
-                raise USBError("Установите polkit/pkexec или используйте sudo python3 flash_usb.py write (см. README).")
+                raise USBError("Install polkit/pkexec or use sudo python3 flash_usb.py write (see README).")
             command.insert(0, pkexec)
         return command
 
@@ -137,9 +137,9 @@ class LinuxUSB:
                 else:
                     self.set_busy(False)
                     if value == 0:
-                        messagebox.showinfo("Готово", "Запись и проверка завершены.")
+                        messagebox.showinfo("Done", "Writing and verification complete.")
                     else:
-                        messagebox.showerror("Ошибка", "Запись не завершена. Подробности в журнале; накопитель может быть записан частично.")
+                        messagebox.showerror("Error", "Writing did not complete. See the log; the drive may be partially written.")
                     self.refresh()
         except queue.Empty:
             pass
@@ -147,7 +147,7 @@ class LinuxUSB:
 
     def close(self):
         if self.busy:
-            messagebox.showwarning("Запись", "Дождитесь завершения операции перед закрытием окна.")
+            messagebox.showwarning("Writing", "Wait for the operation to finish before closing the window.")
         else:
             self.root.destroy()
 
@@ -160,7 +160,7 @@ def build_write_command(iso, device, confirmation):
         if image:
             path = Path(image)
             if not path.is_absolute() or not path.is_file() or not os.access(path, os.X_OK):
-                raise USBError("AppImage недоступен. Сохраните файл, разрешите его выполнение и запустите снова.")
+                raise USBError("AppImage is unavailable. Save the file, make it executable and launch it again.")
             # root cannot traverse the desktop user's private FUSE mount.
             # Start the original image, extracting a separate runtime as root.
             return [str(path), "--appimage-extract-and-run", *arguments]

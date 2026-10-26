@@ -27,15 +27,15 @@ def open_mode(root, mode):
 class OSChooser:
     def __init__(self, root):
         self.root = root
-        root.title("WinUSB Creator — выбор системы")
+        root.title("WinUSB Creator — Select operating system")
         root.geometry("460x230")
         root.resizable(False, False)
         panel = ttk.Frame(root, padding=24)
         panel.pack(fill="both", expand=True)
-        ttk.Label(panel, text="Вы будете устанавливать", font=("sans", 18)).pack(pady=(10, 24))
-        self.windows_button = ttk.Button(panel, text="Виндовс", command=lambda: open_mode(root, "windows"))
+        ttk.Label(panel, text="What would you like to install?", font=("sans", 18)).pack(pady=(10, 24))
+        self.windows_button = ttk.Button(panel, text="Windows", command=lambda: open_mode(root, "windows"))
         self.windows_button.pack(fill="x", pady=4)
-        self.linux_button = ttk.Button(panel, text="ГНУ/Линукс", command=lambda: open_mode(root, "gnu-linux"))
+        self.linux_button = ttk.Button(panel, text="GNU/Linux", command=lambda: open_mode(root, "gnu-linux"))
         self.linux_button.pack(fill="x", pady=4)
 
 

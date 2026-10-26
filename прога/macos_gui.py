@@ -40,8 +40,8 @@ class MacUSB(LinuxUSB):
         add_buttons(root, busy=lambda: getattr(self, "busy", False))
         super().__init__(root)
         root.title("WinUSB Creator — macOS / UEFI")
-        self.append("macOS: для больших WIM установите Homebrew wimlib: brew install wimlib.")
-        self.append("Размонтируйте тома USB в Дисковой утилите; не извлекайте сам накопитель.")
+        self.append("macOS: for large WIM files, install wimlib with Homebrew: brew install wimlib.")
+        self.append("Unmount USB volumes in Disk Utility; do not eject the drive itself.")
 
     def enumerate_devices(self):
         return macos_usb.list_devices()
@@ -50,7 +50,7 @@ class MacUSB(LinuxUSB):
         return macos_usb.check_dependencies()
 
     def prepare_write_command(self, iso, device, confirmation):
-        self.append("После подтверждения macOS начнётся проверка и запись. Журнал будет показан после завершения; не отключайте USB.")
+        self.append("After macOS authorization, verification and writing will begin. The log will appear when finished; do not disconnect the USB drive.")
         return elevation_command(build_write_command(iso, device, confirmation))
 
 

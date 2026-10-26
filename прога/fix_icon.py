@@ -1,7 +1,7 @@
 ﻿import base64, io, os, re
 from PIL import Image
 
-# 1. Делаем чистую иконку с прозрачным фоном из app_icon.jpg
+# 1. Create a clean transparent icon from app_icon.jpg
 img = Image.open("app_icon.jpg").convert("RGBA")
 data = img.getdata()
 img.putdata([
@@ -16,19 +16,19 @@ s = max(img.size) + 16
 sq = Image.new("RGBA", (s, s), (0, 0, 0, 0))
 sq.paste(img, ((s - img.width) // 2, (s - img.height) // 2))
 
-# Сохраняем .ico без PNG-сжатия для полной совместимости с Windows и PyInstaller
+# Save .ico without PNG compression for Windows and PyInstaller compatibility
 sq.save("app_icon.ico", format="ICO", sizes=[(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)], bitmap_format="bmp")
 
-# Готовим PNG в Base64 (64x64) для вшивания прямо внутрь окна Tkinter (iconphoto)
+# Prepare a Base64 PNG (64x64) for the Tkinter window iconphoto
 buf = io.BytesIO()
 sq.resize((64, 64), Image.Resampling.LANCZOS).save(buf, format="PNG")
 b64_png = base64.b64encode(buf.getvalue()).decode("ascii")
 
-# 2. Вшиваем иконку напрямую в V2.py
+# 2. Embed the icon directly in V2.py
 with open("V2.py", "r", encoding="utf-8") as f:
     code = f.read()
 
-# Удаляем старые неудачные попытки установки иконки, если были
+# Remove previous failed icon setup attempts, if present
 code = re.sub(r"\s*# --- ICON_START ---.*?# --- ICON_END ---", "", code, flags=re.DOTALL)
 
 icon_patch = f"""
@@ -46,6 +46,6 @@ if target in code:
     code = code.replace(target, target + icon_patch, 1)
     with open("V2.py", "w", encoding="utf-8") as f:
         f.write(code)
-    print("[УСПЕХ] Иконка намертво вшита внутрь кода V2.py!")
+    print("[SUCCESS] Icon embedded in V2.py!")
 else:
-    print("[ОШИБКА] Не найдена строка self.root.resizable(False, False) в V2.py")
+    print("[ERROR] Could not find self.root.resizable(False, False) in V2.py")

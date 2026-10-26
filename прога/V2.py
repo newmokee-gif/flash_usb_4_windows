@@ -28,7 +28,7 @@ BT_TRACKERS = (
     "http://tracker.openbittorrent.com:80/announce"
 )
 
-# Строгая 64-битная типизация WinAPI для исключения переполнения дескрипторов (HANDLE)
+# Explicit 64-bit WinAPI types prevent handle (HANDLE) overflow
 kernel32 = ctypes.windll.kernel32
 kernel32.CreateFileW.argtypes = [
     wintypes.LPCWSTR,
@@ -69,13 +69,13 @@ def is_arm64_host():
 
 
 WINDOWS_ISO_CHOICES = {
-    "Windows 11 (64-bit Русская)": ("11", "Russian", "x64"),
+    "Windows 11 (64-bit Russian)": ("11", "Russian", "x64"),
     "Windows 11 (64-bit English)": ("11", "English", "x64"),
-    "Windows 11 (ARM64 Русская)": ("11", "Russian", "ARM64"),
+    "Windows 11 (ARM64 Russian)": ("11", "Russian", "ARM64"),
     "Windows 11 (ARM64 English)": ("11", "English", "ARM64"),
-    "Windows 10 (64-bit Русская)": ("10", "Russian", "x64"),
+    "Windows 10 (64-bit Russian)": ("10", "Russian", "x64"),
     "Windows 10 (64-bit English)": ("10", "English", "x64"),
-    "Windows 10 (32-bit Русская)": ("10", "Russian", "x86"),
+    "Windows 10 (32-bit Russian)": ("10", "Russian", "x86"),
     "Windows 10 (32-bit English)": ("10", "English", "x86"),
 }
 
@@ -85,7 +85,7 @@ def windows_iso_parameters(choice):
     try:
         return WINDOWS_ISO_CHOICES[choice]
     except KeyError as exc:
-        raise ValueError("Выберите доступную версию Windows из списка.") from exc
+        raise ValueError("Select an available Windows version from the list.") from exc
 
 
 def windows_iso_architecture(choice):
@@ -125,7 +125,7 @@ def run_as_admin():
         params = subprocess.list2cmdline(sys.argv)
     result = ctypes.windll.shell32.ShellExecuteW(None, "runas", executable, params, None, 1)
     if result <= 32:
-        raise RuntimeError("Не удалось получить права администратора; запуск отменён.")
+        raise RuntimeError("Could not obtain administrator privileges; launch cancelled.")
     sys.exit(0)
 
 
@@ -141,7 +141,7 @@ def decode_console_bytes(raw_bytes):
 
 
 def kill_process_tree(proc):
-    """Надежное завершение процесса вместе со всеми дочерними подпроцессами."""
+    """Reliably terminate the process and all its child processes."""
     if not proc or proc.poll() is not None:
         return
     try:
@@ -177,7 +177,7 @@ def run_cmd(cmd, env=None, timeout=180):
             decode_console_bytes(proc.stderr),
         )
     except subprocess.TimeoutExpired:
-        return -1, "", "Превышено время ожидания команды (TimeoutExpired)"
+        return -1, "", "Command timed out (TimeoutExpired)"
     except Exception as e:
         return -1, "", str(e)
 
@@ -258,7 +258,7 @@ class WindowsOneClickUSB:
         self.iso_path = tk.StringVar()
         self.torrent_source = tk.StringVar()
         self.selected_drive = tk.StringVar()
-        self.win_version = tk.StringVar(value="Windows 11 (ARM64 Русская)" if is_arm64_host() else "Windows 11 (64-bit Русская)")
+        self.win_version = tk.StringVar(value="Windows 11 (ARM64 Russian)" if is_arm64_host() else "Windows 11 (64-bit Russian)")
         self.auto_write_var = tk.BooleanVar(value=True)
         self.check_usb_var = tk.BooleanVar(value=True)
         self.drives_map = {}
@@ -270,7 +270,7 @@ class WindowsOneClickUSB:
         self.refresh_drives()
 
     def ui_call(self, func, *args, **kwargs):
-        """Потокобезопасное выполнение изменений GUI в главном потоке Tkinter."""
+        """Schedule GUI changes safely on the main Tkinter thread."""
         if not self.is_closing:
             try:
                 self.root.after(
@@ -282,8 +282,8 @@ class WindowsOneClickUSB:
     def on_close(self):
         if self.is_busy:
             if not messagebox.askyesno(
-                "Прервать операцию?",
-                "Сейчас выполняется запись или скачивание образа.\nПрервать операцию и закрыть программу?",
+                "Interrupt operation?",
+                "An image is being written or downloaded.\nInterrupt the operation and close the application?",
             ):
                 return
         self.is_closing = True
@@ -299,7 +299,7 @@ class WindowsOneClickUSB:
         folder_frame.pack(fill="x", padx=15, pady=(10, 2))
         tk.Label(
             folder_frame,
-            text=f"📁 Папка для загрузки ISO: {self.work_dir}",
+            text=f"📁 ISO download folder: {self.work_dir}",
             bg="#e9f5ff",
             fg="#004085",
             font=("Segoe UI", 9, "bold"),
@@ -307,7 +307,7 @@ class WindowsOneClickUSB:
 
         tk.Label(
             self.root,
-            text="1. Выберите целевую USB-флешку (от 8 до 128 ГБ):",
+            text="1. Select the target USB drive (8 to 128 GB):",
             font=("Segoe UI", 10, "bold"),
         ).pack(anchor="w", padx=15, pady=(8, 2))
         usb_frame = tk.Frame(self.root)
@@ -325,7 +325,7 @@ class WindowsOneClickUSB:
 
         self.test_usb_btn = tk.Button(
             usb_frame,
-            text="🔍 Тест секторов",
+            text="🔍 Test sectors",
             width=14,
             bg="#f0ad4e",
             fg="white",
@@ -336,7 +336,7 @@ class WindowsOneClickUSB:
         self.test_usb_btn.pack(side="left", padx=(0, 5), ipady=2)
 
         self.refresh_btn = tk.Button(
-            usb_frame, text="Обновить", width=10, command=self.refresh_drives
+            usb_frame, text="Refresh", width=10, command=self.refresh_drives
         )
         self.refresh_btn.pack(side="right")
 
@@ -344,7 +344,7 @@ class WindowsOneClickUSB:
         chk_usb_frame.pack(fill="x", padx=15, pady=(0, 2))
         tk.Checkbutton(
             chk_usb_frame,
-            text="Проверять флешку на ошибки и битые сектора перед записью образа",
+            text="Check the USB drive for errors and bad sectors before writing",
             variable=self.check_usb_var,
             font=("Segoe UI", 9),
             fg="#333333",
@@ -352,7 +352,7 @@ class WindowsOneClickUSB:
 
         tk.Label(
             self.root,
-            text="2. Загрузка образа Windows (фоновый клиент aria2):",
+            text="2. Download Windows image (background aria2 client):",
             font=("Segoe UI", 10, "bold"),
         ).pack(anchor="w", padx=15, pady=(6, 2))
 
@@ -360,7 +360,7 @@ class WindowsOneClickUSB:
         chk_frame.pack(fill="x", padx=15, pady=(0, 2))
         tk.Checkbutton(
             chk_frame,
-            text="Автоматически записать Windows на флешку сразу после скачивания",
+            text="Automatically write Windows to USB after downloading",
             variable=self.auto_write_var,
             font=("Segoe UI", 9, "bold"),
             fg="#0056b3",
@@ -380,7 +380,7 @@ class WindowsOneClickUSB:
 
         self.dl_auto_btn = tk.Button(
             ver_frame,
-            text="🚀 В 1 КЛИК: Скачать Windows и записать",
+            text="🚀 Download and write Windows",
             bg="#0078D7",
             fg="white",
             font=("Segoe UI", 9, "bold"),
@@ -392,21 +392,21 @@ class WindowsOneClickUSB:
         tor_frame = tk.Frame(self.root)
         tor_frame.pack(fill="x", **pad)
         tk.Label(
-            tor_frame, text="Торрент / Magnet / URL:", font=("Segoe UI", 8)
+            tor_frame, text="Torrent / Magnet / URL:", font=("Segoe UI", 8)
         ).pack(side="left", padx=(0, 5))
         tk.Entry(
             tor_frame, textvariable=self.torrent_source, font=("Segoe UI", 8)
         ).pack(side="left", fill="x", expand=True, padx=(0, 5))
         self.dl_custom_btn = tk.Button(
             tor_frame,
-            text="Выбрать .torrent",
+            text="Select .torrent",
             font=("Segoe UI", 8),
             command=self.browse_torrent,
         )
         self.dl_custom_btn.pack(side="left", padx=(0, 4))
         self.dl_mag_btn = tk.Button(
             tor_frame,
-            text="Скачать по ссылке",
+            text="Download from URL",
             font=("Segoe UI", 8),
             command=self.start_custom_pipeline,
         )
@@ -414,7 +414,7 @@ class WindowsOneClickUSB:
 
         tk.Label(
             self.root,
-            text="3. Образ Windows ISO (перехватывается сам или выбирается вручную):",
+            text="3. Windows ISO image (detected automatically or selected manually):",
             font=("Segoe UI", 10, "bold"),
         ).pack(anchor="w", padx=15, pady=(8, 2))
         iso_frame = tk.Frame(self.root)
@@ -427,13 +427,13 @@ class WindowsOneClickUSB:
             font=("Segoe UI", 9),
         ).pack(side="left", fill="x", expand=True, padx=(0, 5), ipady=3)
         self.browse_iso_btn = tk.Button(
-            iso_frame, text="Обзор ISO...", width=12, command=self.browse_iso
+            iso_frame, text="Browse ISO...", width=12, command=self.browse_iso
         )
         self.browse_iso_btn.pack(side="right")
 
         tk.Label(
             self.root,
-            text="4. Статус операции:",
+            text="4. Operation status:",
             font=("Segoe UI", 10, "bold"),
         ).pack(anchor="w", padx=15, pady=(8, 2))
         self.progress = ttk.Progressbar(
@@ -443,7 +443,7 @@ class WindowsOneClickUSB:
 
         self.status_label = tk.Label(
             self.root,
-            text="Готов к работе. Выберите флешку и запустите процесс.",
+            text="Ready. Select a USB drive and start the operation.",
             fg="#555555",
             font=("Segoe UI", 9),
         )
@@ -451,7 +451,7 @@ class WindowsOneClickUSB:
 
         self.write_btn = tk.Button(
             self.root,
-            text="⚡ ЗАПИСАТЬ ВЫБРАННЫЙ WINDOWS ISO НА ФЛЕШКУ",
+            text="⚡ WRITE SELECTED WINDOWS ISO TO USB",
             bg="#d9534f",
             fg="white",
             font=("Segoe UI", 10, "bold"),
@@ -467,7 +467,7 @@ class WindowsOneClickUSB:
         self.ui_call(self.status_label.config, text=text, fg=color)
 
     def verify_usb_health(self, disk_num, standalone=False):
-        self.update_status("Диагностика контроллера USB-флешки...", "blue")
+        self.update_status("Checking the USB drive controller...", "blue")
 
         ps_check = f"""
         $d = Get-Disk -Number {disk_num} -ErrorAction Stop
@@ -484,8 +484,8 @@ class WindowsOneClickUSB:
         b64_line = out.strip().splitlines()[-1] if out.strip() else ""
         if code != 0 or not b64_line:
             raise RuntimeError(
-                f"Не удалось опросить контроллер USB-накопителя (Диск {disk_num}).\n"
-                f"Переподключите флешку и нажмите «Обновить»."
+                f"Could not query the USB drive controller (Disk {disk_num}).\n"
+                f"Reconnect the USB drive and click Refresh."
             )
 
         info = json.loads(base64.b64decode(b64_line).decode("utf-8"))
@@ -495,7 +495,7 @@ class WindowsOneClickUSB:
 
         if disk_size < 7 * (1024**3):
             raise RuntimeError(
-                f"Объем флешки ({disk_size / (1024**3):.1f} ГБ) слишком мал для Windows (нужно минимум 8 ГБ)!"
+                f"The USB drive ({disk_size / (1024**3):.1f} GB) is too small for Windows (at least 8 GB required)!"
             )
 
         if is_ro:
@@ -503,12 +503,12 @@ class WindowsOneClickUSB:
 
         if health.lower() not in ("healthy", "ok", "0", "unknown"):
             raise RuntimeError(
-                f"ВНИМАНИЕ: Контроллер флешки сообщает о неисправности (HealthStatus: {health})!"
+                f"WARNING: The USB controller reports a fault (HealthStatus: {health})!"
             )
 
         physical_drive = f"\\\\.\\PhysicalDrive{disk_num}"
         samples = 20 if standalone else 12
-        block_size = 262144  # 256 КБ
+        block_size = 262144  # 256 KB
         sector_size = 4096
         usable_span = max(block_size * 2, disk_size - (16 * 1024 * 1024))
         step = usable_span // samples
@@ -543,7 +543,7 @@ class WindowsOneClickUSB:
                     if standalone:
                         self.set_progress(pct)
                     self.update_status(
-                        f"Проверка секторов флешки: точка {i + 1}/{samples} ({pct:.0f}%)...",
+                        f"Checking USB sectors: sample {i + 1}/{samples} ({pct:.0f}%)...",
                         "blue",
                     )
 
@@ -567,7 +567,7 @@ class WindowsOneClickUSB:
                         err_code = kernel32.GetLastError()
                         if err_code in (23, 1117):  # ERROR_CRC, ERROR_IO_DEVICE
                             bad_zones.append(
-                                f"{offset // (1024**2)} МБ (WinError {err_code})"
+                                f"{offset // (1024**2)} MB (WinError {err_code})"
                             )
                     else:
                         total_read_bytes += bytes_read.value
@@ -575,7 +575,7 @@ class WindowsOneClickUSB:
                 kernel32.CloseHandle(handle)
         else:
             raise RuntimeError(
-                f"Не удалось открыть физический диск {disk_num} для чтения секторов."
+                f"Could not open physical disk {disk_num} to read sectors."
             )
 
         elapsed = max(0.001, time.time() - t_start)
@@ -584,9 +584,9 @@ class WindowsOneClickUSB:
         if bad_zones:
             zones_str = "\n• ".join(bad_zones[:5])
             raise RuntimeError(
-                f"ОБНАРУЖЕНЫ БИТЫЕ СЕКТОРЫ НА ФЛЕШКЕ!\n\n"
-                f"Ошибки чтения на участках:\n• {zones_str}\n\n"
-                f"Замените USB-накопитель."
+                f"BAD SECTORS DETECTED ON THE USB DRIVE!\n\n"
+                f"Read errors at:\n• {zones_str}\n\n"
+                f"Replace the USB drive."
             )
 
         return read_speed_mb, health
@@ -596,7 +596,7 @@ class WindowsOneClickUSB:
             return
         drive_label = self.selected_drive.get()
         if drive_label not in self.drives_map:
-            messagebox.showwarning("Внимание", "Сначала выберите USB-флешку в списке!")
+            messagebox.showwarning("Warning", "Select a USB drive from the list first!")
             return
 
         disk_num = self.drives_map[drive_label]
@@ -613,22 +613,22 @@ class WindowsOneClickUSB:
             speed_mb, health = self.verify_usb_health(disk_num, standalone=True)
             self.set_progress(100)
             self.update_status(
-                f"Тест пройден! Битых секторов: 0 | Скорость чтения: ~{speed_mb:.1f} МБ/с",
+                f"Test passed! Bad sectors: 0 | Read speed: ~{speed_mb:.1f} MB/s",
                 "green",
             )
             self.ui_call(
                 messagebox.showinfo,
-                "Диагностика USB завершена",
-                f"Устройство: {drive_label}\n\n"
-                f"✅ Статус контроллера: {health}\n"
-                f"✅ Битые сектора (20 зон): Не обнаружены (0 ошибок)\n"
-                f"⚡ Скорость чтения: ~{speed_mb:.1f} МБ/с\n\n"
-                f"Флешка исправна и готова к записи Windows!",
+                "USB diagnostics complete",
+                f"Device: {drive_label}\n\n"
+                f"✅ Controller status: {health}\n"
+                f"✅ Bad sectors (20 sampled areas): None detected (0 errors)\n"
+                f"⚡ Read speed: ~{speed_mb:.1f} MB/s\n\n"
+                f"The sampled checks passed. The USB drive is ready for writing Windows.",
             )
         except Exception as e:
             if not self.is_closing:
-                self.update_status("Обнаружены проблемы с флешкой!", "#d9534f")
-                self.ui_call(messagebox.showerror, "Ошибка диагностики USB", str(e))
+                self.update_status("USB drive problems detected!", "#d9534f")
+                self.ui_call(messagebox.showerror, "USB diagnostics error", str(e))
         finally:
             self.set_busy(False)
 
@@ -639,17 +639,17 @@ class WindowsOneClickUSB:
         drive_label = self.selected_drive.get()
         if drive_label not in self.drives_map:
             messagebox.showwarning(
-                "Не выбрана флешка",
-                "Сначала вставьте и выберите USB-накопитель в пункте 1!",
+                "No USB drive selected",
+                "Insert and select a USB drive in step 1 first!",
             )
             return False
 
         disk_num = self.drives_map[drive_label]
         confirm = messagebox.askyesno(
-            "Подтверждение",
-            f"Образ Windows будет скачан в:\n{self.work_dir}\n\n"
-            f"и АВТОМАТИЧЕСКИ записан на флешку:\n[{drive_label}]\n\n"
-            f"Все данные на флешке будут стерты! Продолжить?",
+            "Confirmation",
+            f"The Windows image will be downloaded to:\n{self.work_dir}\n\n"
+            f"and AUTOMATICALLY written to the USB drive:\n[{drive_label}]\n\n"
+            f"All data on the USB drive will be erased! Continue?",
         )
         if not confirm:
             return False
@@ -670,8 +670,8 @@ class WindowsOneClickUSB:
         if self.is_busy:
             return
         path = filedialog.askopenfilename(
-            title="Выберите .torrent файл с образом Windows",
-            filetypes=[("Torrent файлы (*.torrent)", "*.torrent")],
+            title="Select a Windows image .torrent file",
+            filetypes=[("Torrent files (*.torrent)", "*.torrent")],
         )
         if path:
             self.torrent_source.set(path)
@@ -689,8 +689,8 @@ class WindowsOneClickUSB:
         src = self.torrent_source.get().strip()
         if not src:
             messagebox.showwarning(
-                "Внимание",
-                "Вставьте Magnet-ссылку, прямую ссылку на ISO или выберите .torrent файл!",
+                "Warning",
+                "Paste a magnet link or direct ISO URL, or select a .torrent file!",
             )
             return
         disk_num = self.prepare_target_disk()
@@ -703,7 +703,7 @@ class WindowsOneClickUSB:
 
     def get_direct_microsoft_iso_url(self):
         self.update_status(
-            "Получение прямой ссылки на ISO с серверов Microsoft...", "blue"
+            "Getting a direct ISO URL from Microsoft servers...", "blue"
         )
         fido_path = os.path.join(self.tools_dir, "Fido.ps1")
         if not os.path.exists(fido_path):
@@ -749,8 +749,8 @@ class WindowsOneClickUSB:
 
         if not url:
             raise RuntimeError(
-                "Сервер Microsoft отклонил автоматический запрос прямой ссылки для вашего IP.\n\n"
-                "Решение: Нажмите кнопку «Выбрать .torrent» или вставьте Magnet-ссылку на образ Windows в поле ниже!"
+                "Microsoft rejected the automatic direct-link request from your IP address.\n\n"
+                "Select a .torrent file or paste a Windows image magnet link in the field below."
             )
         return url
 
@@ -765,12 +765,12 @@ class WindowsOneClickUSB:
 
         if is_arm64_host():
             raise RuntimeError(
-                "Для загрузки ISO/торрентов на Windows ARM64 нужен нативный aria2c ARM64 в PATH.\n"
-                "Автоматическая загрузка x64-клиента отключена. "
-                "Можно скачать официальный Windows ARM64 ISO в браузере и выбрать его для записи."
+                "Downloading ISOs/torrents on Windows ARM64 requires native aria2c ARM64 in PATH.\n"
+                "Automatic x64 client download is disabled. "
+                "You can download an official Windows ARM64 ISO in your browser and select it for writing."
             )
 
-        self.update_status("Скачивание фонового клиента aria2c (2.3 МБ)...", "blue")
+        self.update_status("Downloading the background aria2c client (2.3 MB)...", "blue")
         zip_path = os.path.join(self.tools_dir, "aria2.zip")
 
         req = urllib.request.Request(
@@ -796,7 +796,7 @@ class WindowsOneClickUSB:
         return local_aria
 
     def ensure_uefi_ntfs_driver(self):
-        """Скачивает подписанный загрузчик Rufus UEFI:NTFS (64 КБ) для загрузки NTFS-раздела в UEFI."""
+        """Download the signed Rufus UEFI:NTFS bootloader (64 KB) to boot NTFS under UEFI."""
         img_path = os.path.join(self.tools_dir, "uefi-ntfs.img")
         if os.path.exists(img_path) and os.path.getsize(img_path) > 32768:
             return img_path
@@ -859,7 +859,7 @@ class WindowsOneClickUSB:
             ]
 
             self.update_status(
-                f"Этап 1/2: Скачивание образа в {self.work_dir}...", "blue"
+                f"Step 1/2: Downloading image to {self.work_dir}...", "blue"
             )
             self.set_progress(0)
 
@@ -881,16 +881,16 @@ class WindowsOneClickUSB:
                     dl_match = re.search(r"DL:([0-9.]+[A-Za-z]+)", line)
                     eta_match = re.search(r"ETA:([0-9a-zA-Z]+)", line)
 
-                    speed = f" | {dl_match.group(1)}/с" if dl_match else ""
+                    speed = f" | {dl_match.group(1)}/s" if dl_match else ""
                     eta = (
-                        f" | Осталось: {eta_match.group(1)}"
+                        f" | Remaining: {eta_match.group(1)}"
                         if eta_match
                         else ""
                     )
 
                     self.set_progress(pct)
                     self.update_status(
-                        f"Этап 1/2 — Загрузка ISO: {pct}%{speed}{eta}", "black"
+                        f"Step 1/2 — Downloading ISO: {pct}%{speed}{eta}", "black"
                     )
 
             self.active_proc.wait()
@@ -899,7 +899,7 @@ class WindowsOneClickUSB:
 
             if self.active_proc.returncode != 0:
                 raise RuntimeError(
-                    f"Загрузка прервана (код aria2: {self.active_proc.returncode}). Проверьте подключение или торрент."
+                    f"Download interrupted (aria2 exit code: {self.active_proc.returncode}). Check your connection or torrent."
                 )
 
             current_isos = self.list_current_isos()
@@ -910,7 +910,7 @@ class WindowsOneClickUSB:
                 downloaded_iso = max(current_isos, key=os.path.getmtime)
             else:
                 raise RuntimeError(
-                    f"Загрузка завершена, но файл .iso в папке {self.work_dir} не обнаружен."
+                    f"Download finished, but no .iso file was found in {self.work_dir}."
                 )
 
             self.ui_call(self.iso_path.set, downloaded_iso)
@@ -922,26 +922,26 @@ class WindowsOneClickUSB:
             else:
                 self.set_progress(100)
                 self.update_status(
-                    f"Скачивание завершено: {downloaded_iso}", "green"
+                    f"Download complete: {downloaded_iso}", "green"
                 )
 
         except Exception as e:
             if not self.is_closing:
-                self.update_status("Ошибка выполнения!", "#d9534f")
-                self.ui_call(messagebox.showerror, "Ошибка", str(e))
+                self.update_status("Operation failed!", "#d9534f")
+                self.ui_call(messagebox.showerror, "Error", str(e))
         finally:
             self.active_proc = None
             self.set_busy(False)
 
     def format_usb_hybrid(self, disk_num, reserve_mb=64):
         """
-        Создает 2 раздела:
-        1. Основной активный раздел NTFS на всю флешку (минус reserve_mb).
-        2. Раздел FAT32 в конце диска для загрузчика UEFI.
-        Используется надежная связка shrink + PowerShell без ошибок выравнивания цилиндров.
+        Create two partitions:
+        1. Main active NTFS partition occupying the drive minus reserve_mb.
+        2. FAT32 partition at the end of the disk for the UEFI bootloader.
+        Use shrink and PowerShell to avoid cylinder-alignment errors.
         """
         self.update_status(
-            "Подготовка и быстрая разметка флешки (NTFS + UEFI Boot)...", "blue"
+            "Preparing and partitioning USB (NTFS + UEFI Boot)...", "blue"
         )
 
         dp_script = os.path.join(self.tools_dir, "dp_hybrid.txt")
@@ -1017,8 +1017,8 @@ class WindowsOneClickUSB:
                 pass
 
         raise RuntimeError(
-            f"Не удалось разметить флешку (Диск {disk_num}).\n"
-            f"Закройте открытые окна Проводника или антивирус и переподключите флешку.\n{err}"
+            f"Could not partition the USB drive (Disk {disk_num}).\n"
+            f"Close applications accessing the drive, check antivirus interference, and reconnect the USB drive.\n{err}"
         )
 
     def mount_iso(self, iso_path):
@@ -1043,7 +1043,7 @@ class WindowsOneClickUSB:
                 return f"{clean.upper()}:\\"
 
         raise RuntimeError(
-            f"Не удалось смонтировать ISO-образ:\n{iso_path}\n\nПроверьте, что файл не поврежден.\n{err}"
+            f"Could not mount the ISO image:\n{iso_path}\n\nCheck that the file is not corrupted.\n{err}"
         )
 
     def dismount_iso(self, iso_path):
@@ -1084,13 +1084,13 @@ class WindowsOneClickUSB:
             return
         if self.active_proc.returncode >= 8:
             raise RuntimeError(
-                f"Ошибка копирования системных файлов (код Robocopy: {self.active_proc.returncode})."
+                f"Could not copy system files (Robocopy exit code: {self.active_proc.returncode})."
             )
 
     def copy_large_file_with_progress(self, src_file, dst_file, start_pct, end_pct):
         total_size = os.path.getsize(src_file)
         copied = 0
-        chunk_size = 16 * 1024 * 1024  # Блоки по 16 МБ для максимальной скорости записи
+        chunk_size = 16 * 1024 * 1024  # 16 MB chunks for writing throughput
         t0 = time.time()
 
         os.makedirs(os.path.dirname(dst_file), exist_ok=True)
@@ -1120,21 +1120,21 @@ class WindowsOneClickUSB:
 
                 self.set_progress(ui_pct)
                 self.update_status(
-                    f"Прямая запись {fname}: {file_pct * 100:.0f}% ({copied // (1024**2)} / {total_size // (1024**2)} МБ) | ⚡ {speed_mb:.1f} МБ/с",
+                    f"Writing {fname} directly: {file_pct * 100:.0f}% ({copied // (1024**2)} / {total_size // (1024**2)} MB) | ⚡ {speed_mb:.1f} MB/s",
                     "black",
                 )
             fdst.flush()
             os.fsync(fdst.fileno())
 
     def deploy_uefi_ntfs_to_boot_partition(self, uefi_img_path, boot_root):
-        """Монтирует образ uefi-ntfs.img или извлекает из него EFI-файлы на FAT32 раздел."""
-        # Так как uefi-ntfs.img — это образ FAT12/FAT16 размером 64 КБ, распарсим или смонтируем его:
-        # В Windows .img может не монтироваться через Mount-DiskImage, поэтому извлекаем файлы напрямую из FAT12 образа
+        """Mount uefi-ntfs.img or extract its EFI files to the FAT32 partition."""
+        # Parse or mount uefi-ntfs.img, a 64 KB FAT12/FAT16 image:
+        # Windows may not mount .img with Mount-DiskImage, so extract files directly from FAT12
         with open(uefi_img_path, "rb") as f:
             raw = f.read()
 
-        # Резервное извлечение или прямое копирование стандартного EFI загрузчика
-        # Чтобы не зависеть от внешних утилит, записываем uefi-ntfs.img напрямую в сектора второго раздела!
+        # Fallback extraction or direct copy of the standard EFI bootloader
+        # Write uefi-ntfs.img directly to the second partition without external tools
         b64_img = base64.b64encode(uefi_img_path.encode("utf-8")).decode("ascii")
         vol_letter = boot_root[0].upper()
         ps_write_raw = f"""
@@ -1165,12 +1165,12 @@ class WindowsOneClickUSB:
 
         try:
             self.set_progress(12)
-            self.update_status("Монтирование образа Windows ISO...", "blue")
+            self.update_status("Mounting Windows ISO image...", "blue")
             iso_root = self.mount_iso(iso_path)
 
-            # 1. Настраиваем загрузчик UEFI на втором разделе
+            # 1. Set up the UEFI bootloader on the second partition
             self.update_status(
-                f"Установка загрузчика UEFI на раздел {boot_root}...", "blue"
+                f"Installing the UEFI bootloader to partition {boot_root}...", "blue"
             )
             uefi_written = False
             if uefi_img:
@@ -1179,7 +1179,7 @@ class WindowsOneClickUSB:
                 )
 
             if not uefi_written:
-                # Если нет интернета для uefi-ntfs.img, копируем стандартный загрузчик EFI + boot.wim
+                # If uefi-ntfs.img cannot be downloaded, copy the standard EFI bootloader and boot.wim
                 self.run_robocopy_fast(
                     iso_root,
                     boot_root,
@@ -1188,9 +1188,9 @@ class WindowsOneClickUSB:
 
             self.set_progress(22)
 
-            # 2. Копируем все файлы установщика на основной раздел NTFS (кроме тяжелого install.wim/esd)
+            # 2. Copy installer files to the main NTFS partition (except the large install.wim/esd)
             self.update_status(
-                f"Копирование системных файлов на основной раздел {data_root}...",
+                f"Copying system files to the main partition {data_root}...",
                 "blue",
             )
             self.run_robocopy_fast(
@@ -1200,7 +1200,7 @@ class WindowsOneClickUSB:
             )
             self.set_progress(34)
 
-            # 3. Прямая потоковая запись главного образа install.wim / install.esd на NTFS без резки DISM
+            # 3. Stream install.wim / install.esd directly to NTFS without DISM splitting
             found_main_image = False
             for img_name in ("install.wim", "install.esd", "install.swm"):
                 src_img = os.path.join(iso_root, "sources", img_name)
@@ -1212,14 +1212,14 @@ class WindowsOneClickUSB:
 
             if not found_main_image:
                 raise RuntimeError(
-                    "В выбранном ISO-образе не найден файл sources\\install.wim или install.esd!\n"
-                    "Убедитесь, что это установочный образ Windows 10/11."
+                    "The selected ISO does not contain sources\\install.wim or install.esd!\n"
+                    "Make sure this is a Windows 10/11 installation image."
                 )
 
             if self.is_closing:
                 return
 
-            # 4. Записываем загрузочный сектор Legacy BIOS (с флагом /force, чтобы избежать блокировок)
+            # 4. Write the Legacy BIOS boot sector (with /force to avoid locks)
             bootsect_exe = os.path.join(iso_root, "boot", "bootsect.exe")
             if os.path.exists(bootsect_exe) and not os.path.exists(os.path.join(iso_root, "efi", "boot", "bootaa64.efi")):
                 run_cmd(
@@ -1235,20 +1235,20 @@ class WindowsOneClickUSB:
 
             total_sec = int(time.time() - t_total_start)
             mins, secs = divmod(total_sec, 60)
-            time_str = f"{mins} мин {secs} сек" if mins else f"{secs} сек"
+            time_str = f"{mins} min {secs} sec" if mins else f"{secs} sec"
 
             self.set_progress(100)
             self.update_status(
-                f"Готово за {time_str}! Загрузочная флешка Windows создана ({data_root})",
+                f"Done in {time_str}! Windows bootable USB created ({data_root})",
                 "green",
             )
             self.ui_call(
                 messagebox.showinfo,
-                "Успех!",
-                f"Загрузочная флешка Windows полностью готова за {time_str}!\n\n"
-                f"• Основной раздел с установщиком (NTFS): {data_root}\n"
-                f"• Раздел загрузчика UEFI: {boot_root}\n\n"
-                f"Флешка подготовлена для UEFI. Legacy BIOS применим только к совместимым x86/x64 образам.",
+                "Success!",
+                f"Windows bootable USB completed in {time_str}!\n\n"
+                f"• Main installer partition (NTFS): {data_root}\n"
+                f"• UEFI bootloader partition: {boot_root}\n\n"
+                f"The USB drive is prepared for UEFI. Legacy BIOS applies only to compatible x86/x64 images.",
             )
         finally:
             if iso_root:
@@ -1258,9 +1258,9 @@ class WindowsOneClickUSB:
         if self.is_busy:
             return
         path = filedialog.askopenfilename(
-            title="Выберите образ Windows ISO",
+            title="Select a Windows ISO image",
             initialdir=self.work_dir,
-            filetypes=[("Образы дисков (*.iso)", "*.iso")],
+            filetypes=[("Disk images (*.iso)", "*.iso")],
         )
         if path:
             self.iso_path.set(path)
@@ -1288,7 +1288,7 @@ class WindowsOneClickUSB:
                     num = d["Number"]
                     name = d["FriendlyName"]
                     size_gb = round(d["Size"] / (1024**3), 2)
-                    label = f"Диск {num}: {name} ({size_gb} ГБ)"
+                    label = f"Disk {num}: {name} ({size_gb} GB)"
                     self.drives_map[label] = num
 
             vals = list(self.drives_map.keys())
@@ -1296,10 +1296,10 @@ class WindowsOneClickUSB:
             if vals:
                 self.drive_combo.current(0)
             else:
-                self.selected_drive.set("USB-флешки (до 128 ГБ) не найдены")
+                self.selected_drive.set("No USB drives found (up to 128 GB)")
         except Exception as e:
             messagebox.showerror(
-                "Ошибка", f"Не удалось получить список флешек:\n{e}"
+                "Error", f"Could not list USB drives:\n{e}"
             )
 
     def start_manual_write(self):
@@ -1310,19 +1310,19 @@ class WindowsOneClickUSB:
 
         if not iso or not os.path.exists(iso):
             messagebox.showwarning(
-                "Внимание", "Сначала выберите существующий Windows ISO-файл!"
+                "Warning", "Select an existing Windows ISO file first!"
             )
             return
         if drive_label not in self.drives_map:
             messagebox.showwarning(
-                "Внимание", "Выберите корректный USB-накопитель!"
+                "Warning", "Select a valid USB drive!"
             )
             return
 
         disk_num = self.drives_map[drive_label]
         confirm = messagebox.askyesno(
-            "Подтверждение записи Windows",
-            f"Записать образ Windows:\n{os.path.basename(iso)}\nна устройство:\n[{drive_label}]?\n\nВсе данные на флешке будут стерты!",
+            "Confirm Windows writing",
+            f"Write Windows image:\n{os.path.basename(iso)}\nto device:\n[{drive_label}]?\n\nAll data on the USB drive will be erased!",
         )
         if not confirm:
             return
@@ -1337,8 +1337,8 @@ class WindowsOneClickUSB:
             self.write_windows_iso_to_usb(iso, disk_num, skip_health=False)
         except Exception as e:
             if not self.is_closing:
-                self.update_status("Ошибка при создании флешки!", "#d9534f")
-                self.ui_call(messagebox.showerror, "Ошибка записи", str(e))
+                self.update_status("USB creation failed!", "#d9534f")
+                self.ui_call(messagebox.showerror, "Write error", str(e))
         finally:
             self.active_proc = None
             self.set_busy(False)

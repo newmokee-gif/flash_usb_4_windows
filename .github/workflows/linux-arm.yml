@@ -32,7 +32,7 @@ jobs:
             /opt/build-venv/bin/python -m pip install PyInstaller==6.22.3 certifi==2025.10.5
             /opt/build-venv/bin/python -m unittest discover -s tests -v
             /opt/build-venv/bin/python packaging/appimage/build.py --output /out
-            readelf -h /out/flash-usb-v0.3.2-aarch64.AppImage
+            readelf -h /out/flash-usb-v0.3.3-aarch64.AppImage
           ' 2>&1 | tee arm-build.log
           result=${PIPESTATUS[0]}
           set -e
@@ -96,7 +96,7 @@ jobs:
             xvfb_pid=$!
             trap "kill $xvfb_pid" EXIT
             export DISPLAY=:99 PYTHONDONTWRITEBYTECODE=1
-            app=/app/flash-usb-v0.3.2-aarch64.AppImage
+            app=/app/flash-usb-v0.3.3-aarch64.AppImage
             runuser -u nobody -- "$app" --appimage-extract-and-run check
             runuser -u nobody -- "$app" --appimage-extract-and-run list
             runuser -u nobody -- "$app" --appimage-extract-and-run --self-test
@@ -162,8 +162,8 @@ jobs:
 
           ## Linux ARM64 / AArch64
 
-          ARM64 AppImage: `flash-usb-v0.3.2-aarch64.AppImage` (glibc 2.36+, Debian 12+/Fedora ARM64).
-          Run `chmod +x flash-usb-v0.3.2-aarch64.AppImage`, then launch it; without FUSE use `--appimage-extract-and-run`.
+          ARM64 AppImage: `flash-usb-v0.3.3-aarch64.AppImage` (glibc 2.36+, Debian 12+/Fedora ARM64).
+          Run `chmod +x flash-usb-v0.3.3-aarch64.AppImage`, then launch it; without FUSE use `--appimage-extract-and-run`.
           Python/Tk are bundled; system disk tools remain required as listed above.
           The existing `.deb` (all) and `.rpm` (noarch) also passed installation, GUI/CLI, WIM and uninstall checks on native ARM64 runners.
           AppImage GUI/process restart passed without host Python on Debian ARM64. Checksums: `SHA256SUMS-AppImage-aarch64.txt`.

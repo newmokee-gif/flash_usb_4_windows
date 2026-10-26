@@ -20,7 +20,7 @@ def installation_panel(parent, description):
     """Keep optional setup visible without changing the user's native theme."""
     style = ttk.Style(parent)
     style.configure("Setup.TButton", font="TkHeadingFont", padding=(16, 9))
-    frame = ttk.LabelFrame(parent, text="Установка дополнительных компонентов", padding=(12, 8))
+    frame = ttk.LabelFrame(parent, text="Install additional components", padding=(12, 8))
     frame.pack(fill="x", padx=15, pady=(8, 10))
     label = ttk.Label(frame, text=description, wraplength=600, justify="left")
     label.pack(fill="x", pady=(0, 6))
@@ -32,8 +32,8 @@ def installation_panel(parent, description):
 
 def add_dependency_button(parent, command):
     actions = installation_panel(parent,
-        "Если не хватает программ для загрузки или записи: установка через пакетный менеджер системы, с подтверждением.")
-    button = ttk.Button(actions, text="Установить зависимости программы", command=command,
+        "Missing download or writing tools? Install them with your system package manager, after confirmation.")
+    button = ttk.Button(actions, text="Install application dependencies", command=command,
                         style="Setup.TButton")
     button.pack(fill="x")
     return button
@@ -58,7 +58,7 @@ def launch(system, local_aria=None):
         from winget_install import launch as install_winget
         install_winget(local_aria)
     else:
-        raise RuntimeError("Эта кнопка доступна только в Windows и macOS.")
+        raise RuntimeError("This button is available only on Windows and macOS.")
 
 
 def add_buttons(parent, busy=lambda: False, local_aria=None):
@@ -67,37 +67,37 @@ def add_buttons(parent, busy=lambda: False, local_aria=None):
         return
     name = "Homebrew" if system == "darwin" else "WinGet"
     frame = installation_panel(parent,
-        f"{name} — менеджер пакетов. Установите его, если он нужен для дополнительных компонентов программы.")
+        f"{name} — a package manager. Install it if required for additional application components.")
 
     def check():
-        messagebox.showinfo(name, f"{name} найден." if installed(system) else
-                            f"{name} пока не найден. Завершите установку и перезапустите приложение.", parent=parent)
+        messagebox.showinfo(name, f"{name} was found." if installed(system) else
+                            f"{name} was not found. Complete installation and restart the application.", parent=parent)
 
     def start():
         if busy():
-            messagebox.showinfo(name, "Дождитесь завершения текущей операции.", parent=parent)
+            messagebox.showinfo(name, "Wait for the current operation to finish.", parent=parent)
             return
         if installed(system):
             check()
             return
         explanation = (
-            "Откроется Терминал с официальным установщиком Homebrew. "
-            "Следуйте его инструкциям; может потребоваться пароль администратора. Продолжить?"
+            "Terminal will open with the official Homebrew installer. "
+            "Follow its instructions; an administrator password may be required. Continue?"
             if system == "darwin" else
-            "Откроется установка файлов WinGet с GitHub Microsoft. Загрузка использует "
-            "aria2, если он установлен, иначе HTTPS-загрузчик Windows. "
-            "Будут проверены SHA-256 и подписи Microsoft. Продолжить?"
+            "The WinGet installer will download files from Microsoft's GitHub. Downloads use "
+            "aria2 when installed, otherwise the Windows HTTPS downloader. "
+            "SHA-256 hashes and Microsoft signatures will be verified. Continue?"
         )
         if not messagebox.askyesno(name, explanation, parent=parent):
             return
         try:
             launch(system, local_aria)
         except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
-            messagebox.showerror(name, f"Не удалось открыть установку: {exc}", parent=parent)
+            messagebox.showerror(name, f"Could not launch installation: {exc}", parent=parent)
             return
-        messagebox.showinfo(name, "Установка открыта. Завершите её в отдельном окне, "
-                            "затем нажмите «Проверить» или перезапустите приложение.", parent=parent)
+        messagebox.showinfo(name, "Installation has started. Complete it in the separate window, "
+                            "then click Check or restart the application.", parent=parent)
 
-    ttk.Button(frame, text=f"Установить {name}", command=start,
+    ttk.Button(frame, text=f"Install {name}", command=start,
                style="Setup.TButton").pack(side="left", fill="x", expand=True)
-    ttk.Button(frame, text="Проверить", command=check).pack(side="left", padx=8)
+    ttk.Button(frame, text="Check", command=check).pack(side="left", padx=8)

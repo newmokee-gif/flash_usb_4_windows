@@ -2,9 +2,7 @@
 Version=1.0
 Type=Application
 Name=WinUSB Creator
-Name[ru]=Создание Windows USB
-Comment=Create a Windows UEFI installer on a USB drive
-Comment[ru]=Создание установочной USB-флешки Windows для UEFI
+Comment=Create Windows and GNU/Linux installation USB drives
 Exec=flash-usb
 TryExec=flash-usb
 Icon=flash-usb

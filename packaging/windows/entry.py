@@ -99,7 +99,7 @@ def self_test(report):
                 root.update()
                 if arm and V2.windows_iso_architecture(app.win_version.get()) != "ARM64":
                     raise RuntimeError("ARM64 must be the default image architecture on ARM64")
-                if "Установить WinGet" not in labels(root):
+                if "Install WinGet" not in labels(root):
                     raise RuntimeError("WinGet installation button missing")
                 result.update(gui="passed", ctypes="passed", installer_button="passed", tk=V2.tk.TkVersion)
                 V2.kernel32.GetLastError()
@@ -118,7 +118,7 @@ def self_test(report):
                 platform_selector.OSChooser(root)
                 root.update()
                 actual = {text.casefold() for text in labels(root)}
-                if not {"виндовс", "гну/линукс"}.issubset(actual):
+                if not {"windows", "gnu/linux"}.issubset(actual):
                     raise RuntimeError("Both operating-system choices must be present")
                 result["selector"] = "passed"
             finally:

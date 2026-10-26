@@ -250,7 +250,7 @@ def _digest(text, filename, algorithm, *, per_image=False, section=""):
         lines = text.splitlines()
         starts = [i for i, line in enumerate(lines) if line.strip() == section]
         if len(starts) != 1:
-            raise DownloadError("Не найдена однозначная секция контрольных сумм издателя.")
+            raise DownloadError("Could not find an unambiguous publisher checksum section.")
         selected = []
         for line in lines[starts[0] + 1:]:
             if line.startswith("### "):
@@ -260,7 +260,7 @@ def _digest(text, filename, algorithm, *, per_image=False, section=""):
     length = {"sha256": 64, "sha512": 128}[algorithm]
     if re.fullmatch(rf"\s*[a-fA-F0-9]{{{length}}}\s*", text):
         if not per_image:
-            raise DownloadError("Контрольная сумма без имени допустима только для отдельного файла образа.")
+            raise DownloadError("A checksum without a filename is allowed only in an image-specific checksum file.")
         return text.strip().lower()
     return checksum_from_manifest(text, filename, algorithm)
 
@@ -284,7 +284,7 @@ def _resolve_image(entry):
         text = _metadata(entry.release_pointer_url)
         names = re.findall(r"(?m)^(\d{8}T\d{6}Z/install-amd64-minimal-\d{8}T\d{6}Z\.iso)(?:\s|$)", text)
         if len(names) != 1:
-            raise DownloadError("Gentoo: не найден единственный актуальный минимальный ISO.")
+            raise DownloadError("Gentoo: could not find a unique current minimal ISO.")
         url = urljoin(entry.image_url, names[0])
         filename = names[0].rsplit("/", 1)[-1]
         checksum_url = url + ".DIGESTS"
@@ -297,7 +297,7 @@ def _resolve_image(entry):
         urls = [urljoin(entry.publisher_page_url, link) for link in parser.links]
         urls = [url for url in urls if urlsplit(url).scheme in ("http", "https") and urlsplit(url).path.rsplit("/", 1)[-1] == entry.filename]
         if not urls:
-            raise DownloadError("Mageia: официальный сайт не вернул зеркало выбранного ISO.")
+            raise DownloadError("Mageia: the official website did not return a mirror for the selected ISO.")
         # The publisher may advertise HTTP mirror URLs; only their HTTPS
         # equivalent is accepted by our downloader, never a TLS downgrade.
         url = urls[0].replace("http://", "https://", 1)
@@ -312,7 +312,7 @@ def _resolve_image(entry):
                           for target in path.get("target-files", [])]
             if (data.get("product-name") != "Tails" or data.get("build_target") != "amd64"
                     or data.get("channel") != "stable" or len(candidates) != 1):
-                raise DownloadError("Tails: не найден единственный официальный USB-образ amd64.")
+                raise DownloadError("Tails: could not find a unique official amd64 USB image.")
             url, digest = candidates[0].get("url", ""), candidates[0].get("sha256", "")
             parsed = urlsplit(url)
             filename = parsed.path.rsplit("/", 1)[-1]
@@ -320,17 +320,17 @@ def _resolve_image(entry):
                     or parsed.query or parsed.fragment
                     or not re.fullmatch(r"/tails/stable/tails-amd64-([\d.]+)/tails-amd64-\1\.img", parsed.path)
                     or not re.fullmatch(r"[a-fA-F0-9]{64}", digest)):
-                raise DownloadError("Tails: некорректные URL или SHA-256 официального USB-образа.")
+                raise DownloadError("Tails: invalid URL or SHA-256 for the official USB image.")
             return replace(entry, image_url=url, filename=filename, sha256=digest.lower(),
                            checksum_url=entry.api_json_url, api_json_url="")
         if entry.api_format != "popos":
-            raise DownloadError("Неизвестный формат метаданных дистрибутива.")
+            raise DownloadError("Unknown distribution metadata format.")
         url, digest = data.get("url", ""), data.get("sha_sum", "")
         if urlsplit(url).scheme != "https" or urlsplit(url).hostname != "iso.pop-os.org" or not re.fullmatch(r"[0-9a-fA-F]{64}", digest):
-            raise DownloadError("Pop!_OS: официальный API не вернул доверенный ISO и SHA-256.")
+            raise DownloadError("Pop!_OS: the official API did not return a trusted ISO and SHA-256.")
         filename = urlsplit(url).path.rsplit("/", 1)[-1]
         if not re.fullmatch(r"[A-Za-z0-9_.+-]+\.iso", filename):
-            raise DownloadError("Некорректное имя образа Pop!_OS.")
+            raise DownloadError("Invalid Pop!_OS image filename.")
         return replace(entry, image_url=url, filename=filename, sha256=digest.lower(), api_json_url="")
     if not entry.pattern:
         manifest = _metadata(entry.checksum_url)
@@ -338,7 +338,7 @@ def _resolve_image(entry):
         if entry.checksum_filename_pattern:
             candidates = _manifest_names(manifest)
             if len(candidates) != 1 or not re.fullmatch(entry.checksum_filename_pattern, next(iter(candidates))):
-                raise DownloadError("Контрольная сумма относится к другому образу или архитектуре.")
+                raise DownloadError("The checksum belongs to another image or architecture.")
             filename = next(iter(candidates))
         elif filename.startswith("latest-nixos-"):
             candidates = _manifest_names(manifest)
@@ -369,12 +369,12 @@ def _resolve_image(entry):
         if entry.checksum_pattern:
             candidates = [link for link in links if re.fullmatch(entry.checksum_pattern, link)]
             if not candidates:
-                raise DownloadError(f"{entry.distro}: официальный список контрольных сумм не найден.")
+                raise DownloadError(f"{entry.distro}: official checksum list not found.")
             checksum_url = urljoin(base, _latest(candidates))
         else:
             candidates = [link for link in links if re.fullmatch(entry.pattern, link)]
             if not candidates:
-                raise DownloadError(f"{entry.distro}: установочный образ этой архитектуры не найден.")
+                raise DownloadError(f"{entry.distro}: installation image for this architecture not found.")
             filename = _latest(candidates)
             checksum_url = urljoin(base, filename + entry.checksum_suffix)
     manifest = _metadata(checksum_url)
@@ -382,7 +382,7 @@ def _resolve_image(entry):
     if not names:
         # Some per-image .sha256 files contain only a digest, without filename.
         if not entry.checksum_suffix:
-            raise DownloadError(f"{entry.distro}: подходящий ISO отсутствует в официальных контрольных суммах.")
+            raise DownloadError(f"{entry.distro}: no matching ISO in the official checksums.")
     else:
         filename = _latest(names)
     digest = _digest(manifest, filename, entry.checksum_algorithm, per_image=bool(entry.checksum_suffix))

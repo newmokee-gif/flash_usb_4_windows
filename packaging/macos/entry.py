@@ -51,7 +51,7 @@ def self_test(report):
                         found.append(str(child.cget("text")))
                     found.extend(labels(child))
                 return found
-            if "Установить Homebrew" not in labels(root):
+            if "Install Homebrew" not in labels(root):
                 raise RuntimeError("Homebrew installation button missing")
             result.update(gui="passed", tk=tk.TkVersion)
         finally:
@@ -61,7 +61,7 @@ def self_test(report):
             platform_selector.OSChooser(root)
             root.update()
             actual = {text.casefold() for text in labels(root)}
-            if not {"виндовс", "гну/линукс"}.issubset(actual):
+            if not {"windows", "gnu/linux"}.issubset(actual):
                 raise RuntimeError("Both operating-system choices must be present")
             result["selector"] = "passed"
         finally:
