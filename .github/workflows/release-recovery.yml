@@ -1,0 +1,148 @@
+name: Complete verified v0.3.0 publication
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/release-recovery.yml
+      - scripts/recover_multios.py
+      - tests/test_recover_multios.py
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: publish-verified-v0.3.0-recovery
+  cancel-in-progress: false
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: operations
+      - uses: actions/checkout@v4
+        with:
+          ref: 6809f2cc4c816ff46f01078b0e784f8225ff0813
+          path: source
+      - name: Verify the sixteen original successful checks and pinned artifacts
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set +e
+          python ../operations/scripts/recover_multios.py --audit-only 2>&1 | tee recovery-preflight.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python -c 'from pathlib import Path; t=Path("recovery-preflight.log").read_text(errors="replace")[-4000:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-preflight-audit
+          path: |
+            source/recovery-audit.json
+            source/recovery-preflight.log
+  apple-silicon:
+    needs: preflight
+    # A fresh assignment through GitHub's current free native ARM runner pool.
+    runs-on: macos-latest
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 6809f2cc4c816ff46f01078b0e784f8225ff0813
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: arm64
+      - name: Build verified native macOS 15-compatible torrent helper
+        run: |
+          test "$(uname -m)" = arm64
+          brew install wimlib
+          python -m pip install PyInstaller==6.22.3 certifi==2025.10.5
+          set +e
+          python packaging/macos/build_aria2.py --arch arm64 --prefix "$RUNNER_TEMP/aria2-macos15" 2>&1 | tee aria2-build.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python -c 'from pathlib import Path; t=Path("aria2-build.log").read_text(errors="replace")[-3500:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"
+      - name: Complete native macOS validation and restored-DMG smoke tests
+        run: |
+          set +e
+          (
+            set -e
+            python -m unittest discover -s tests -p 'test_macos*.py' -v
+            python -m unittest discover -s tests -p 'test_raw_usb.py' -v
+            python -m unittest discover -s tests -p 'test_image_download.py' -v
+            python прога/macos_usb.py check
+            python прога/macos_usb.py list
+            fixture=$(mktemp -d)
+            mkdir "$fixture/content"
+            for part in a b c; do
+              dd if=/dev/urandom of="$fixture/content/$part" bs=1048576 count=1 2>/dev/null
+            done
+            wimlib-imagex capture "$fixture/content" "$fixture/fixture.wim" --compress=none --check
+            wimlib-imagex split "$fixture/fixture.wim" "$fixture/install.swm" 1 --check
+            wimlib-imagex verify "$fixture/install.swm" "--ref=$fixture/install*.swm"
+            python tests/smoke_macos_images.py --wim "$fixture/fixture.wim"
+            python packaging/macos/build.py --arch arm64 --aria2 "$RUNNER_TEMP/aria2-macos15/bin/aria2c" --output macos-dist
+            sudo "$(command -v python)" tests/smoke_raw_macos.py
+          ) 2>&1 | tee macos-check.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python -c 'from pathlib import Path; t=Path("macos-check.log").read_text(errors="replace")[-4000:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: recovery-macos-AppleSilicon
+          path: macos-dist/*
+          if-no-files-found: error
+  publish:
+    needs: apple-silicon
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: operations
+      - uses: actions/checkout@v4
+        with:
+          ref: 6809f2cc4c816ff46f01078b0e784f8225ff0813
+          path: source
+      - uses: actions/download-artifact@v4
+        with:
+          name: recovery-macos-AppleSilicon
+          path: source/desktop-dist
+      - name: Verify original checks, artifact provenance and all eight applications
+        working-directory: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set +e
+          python ../operations/scripts/recover_multios.py 2>&1 | tee recovery-publication.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python -c 'from pathlib import Path; t=Path("recovery-publication.log").read_text(errors="replace")[-4500:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-recovery-audit
+          path: |
+            source/recovery-audit.json
+            source/recovery-publication.log
