@@ -11,6 +11,7 @@ import macos_usb
 import platform_selector
 import raw_usb
 from gnu_linux_gui import GNULinuxUSB
+from image_download import bundled_aria2, aria_environment
 from linux_usb import Device, subprocess_environment
 
 
@@ -27,6 +28,15 @@ def self_test(report):
         if context.cert_store_stats().get("x509_ca", 0) < 1:
             raise RuntimeError("Bundled HTTPS certificate roots are missing")
         result["https_certificate_roots"] = "passed"
+        aria = bundled_aria2()
+        if not aria:
+            raise RuntimeError("Bundled aria2 downloader is missing")
+        aria_result = subprocess.run([aria, "--no-conf=true", "--version"], capture_output=True,
+                                     text=True, timeout=30, check=True,
+                                     env=aria_environment(aria))
+        if "aria2" not in aria_result.stdout.lower() or "bittorrent" not in aria_result.stdout.lower():
+            raise RuntimeError("Bundled aria2 does not advertise BitTorrent support")
+        result["bundled_torrent_downloader"] = "passed"
         devices = macos_usb.list_devices()
         result["discovery"] = "passed"
         result["usb_devices"] = len(devices)

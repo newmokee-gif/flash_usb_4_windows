@@ -215,5 +215,59 @@ class WindowsHandleOrderingTests(unittest.TestCase):
         self.assertEqual(native.validate.call_count, 2)
 
 
+class MacClaimTests(unittest.TestCase):
+    """Mock CoreFoundation/DA callbacks; never load or open native disks."""
+    def claim(self):
+        claim = object.__new__(raw._MacClaim)
+        claim.path = "/dev/disk99"
+        claim.da, claim.cf = Mock(), Mock()
+        claim.da.DASessionCreate.return_value = 11
+        claim.da.DADiskCreateFromBSDName.return_value = 22
+        claim.session = claim.disk = None
+        claim.mode, claim.loop = 33, 44
+        claim.claimed = claim.done = claim.registered = claim.scheduled = False
+        claim.claim_status = None
+        claim.runloop_results = {}
+        claim.approval, claim.release, claim.callback = Mock(), Mock(), Mock()
+        claim._description = Mock(return_value="mock CoreFoundation object")
+        return claim
+
+    def test_completion_required_before_enter_and_claim_held_until_exit(self):
+        claim = self.claim()
+        def runloop(*unused):
+            claim._claimed(22, None, None)
+            return 3
+        claim.cf.CFRunLoopRunInMode.side_effect = runloop
+        with claim:
+            self.assertTrue(claim.claimed)
+            claim.da.DADiskUnclaim.assert_not_called()
+            claim.cf.CFRelease.assert_not_called()
+        claim.da.DADiskUnclaim.assert_called_once_with(22)
+        claim.da.DASessionUnscheduleFromRunLoop.assert_called_once_with(11, 44, 33)
+        self.assertEqual([c.args[0] for c in claim.cf.CFRelease.call_args_list], [22, 11])
+
+    def test_no_runloop_sources_refused_with_diagnostics(self):
+        claim = self.claim()
+        claim.cf.CFRunLoopRunInMode.return_value = 1
+        with self.assertRaisesRegex(raw.USBError, r"runloop results=\{1: 1\}"):
+            claim.__enter__()
+        claim.da.DADiskUnclaim.assert_not_called()
+        claim.da.DAUnregisterCallback.assert_called_once()
+        claim.da.DASessionUnscheduleFromRunLoop.assert_called_once()
+        self.assertIsNone(claim.session)
+
+    def test_native_dissenter_status_reported_and_never_enters(self):
+        claim = self.claim()
+        claim.da.DADissenterGetStatus.return_value = -119930878  # 0xF8DA0002
+        def runloop(*unused):
+            claim._claimed(22, 55, None)
+            return 3
+        claim.cf.CFRunLoopRunInMode.side_effect = runloop
+        with self.assertRaisesRegex(raw.USBError, "0xf8da0002.*busy"):
+            claim.__enter__()
+        claim.da.DADiskUnclaim.assert_not_called()
+        self.assertIsNone(claim.disk)
+
+
 if __name__ == "__main__":
     unittest.main()

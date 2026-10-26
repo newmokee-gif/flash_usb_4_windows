@@ -92,6 +92,11 @@ jobs:
             python -c 'from pathlib import Path; t=Path("native-tests.log").read_text(errors="replace")[-3500:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
           }
           exit $result
+      - name: Verify official aria2 helper on the native Windows host
+        shell: pwsh
+        run: |
+          python -c 'import sys, subprocess; sys.path.insert(0,"прога"); from image_download import ensure_windows_aria2; executable=ensure_windows_aria2(log=print, allow_emulation=True); result=subprocess.run([executable,"--no-conf=true","--version"], text=True, capture_output=True, timeout=30, check=True); print(result.stdout); assert "BitTorrent" in result.stdout'
+          exit $LASTEXITCODE
       - name: Download and verify official WinGet packages without installing
         shell: pwsh
         run: |

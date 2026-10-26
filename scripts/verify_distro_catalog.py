@@ -48,7 +48,7 @@ def validate(entry):
             if response.status != 200:
                 raise RuntimeError(f"Image HEAD HTTP {response.status}")
         result.update(status="ok", image_url=image.image_url, checksum_url=image.checksum_url,
-                      sha256=image.sha256)
+                      sha256=image.sha256, sha512=image.sha512, torrent_url=image.torrent_url)
         if image.torrent_url:
             try:
                 data = fetch(image.torrent_url, limit=4*1024*1024)
@@ -57,6 +57,10 @@ def validate(entry):
                 result["torrent"] = "ok"
             except Exception as error:
                 result["torrent"] = "HTTPS fallback: " + str(error)
+        else:
+            result["torrent"] = "No matching publisher torrent found; official HTTPS"
+        message = (entry.id + ": " + result["image_url"] + " | " + result["torrent"]).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        print("::notice::" + message, flush=True)
     except Exception as error:
         result.update(status="error", error=str(error), metadata=metadata_diagnostics(), directory=failure_directory(entry))
         diagnostic = entry.id + ": " + str(error) + "\n" + json.dumps({"metadata": result["metadata"], "directory": result["directory"]}, ensure_ascii=False)

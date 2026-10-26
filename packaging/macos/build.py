@@ -8,6 +8,7 @@ import argparse
 import hashlib
 import importlib.metadata
 import json
+import os
 from pathlib import Path
 import platform
 import plistlib
@@ -35,6 +36,11 @@ def verify_architecture(bundle, expected):
         architectures = subprocess.check_output(["/usr/bin/lipo", "-archs", str(candidate)], text=True).split()
         if architectures != [expected]:
             raise RuntimeError(f"Expected native {expected}, found {architectures}: {candidate}")
+        dependencies = subprocess.check_output(["/usr/bin/otool", "-L", str(candidate)], text=True)
+        for line in dependencies.splitlines()[1:]:
+            dependency = line.strip().split(" (", 1)[0]
+            if dependency.startswith("/") and not dependency.startswith(("/System/Library/", "/usr/lib/")):
+                raise RuntimeError(f"Bundled binary links outside the application/system: {candidate}: {dependency}")
         count += 1
     if not count:
         raise RuntimeError("Bundle contains no Mach-O executable")
@@ -68,6 +74,9 @@ def main():
         raise RuntimeError("Rosetta builds are not accepted as native builds")
     if importlib.metadata.version("pyinstaller") != PYINSTALLER_VERSION:
         raise RuntimeError(f"Install PyInstaller=={PYINSTALLER_VERSION}")
+    aria = shutil.which("aria2c", path="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin")
+    if not aria:
+        raise RuntimeError("Install native aria2 with Homebrew before building the macOS application")
     source = Path(__file__).resolve().parents[2]
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -76,6 +85,7 @@ def main():
         subprocess.run([
             sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir", "--windowed",
             "--name", "WinUSB Creator", "--target-architecture", args.arch,
+            "--add-binary", str(Path(aria).resolve()) + os.pathsep + ".",
             "--osx-bundle-identifier", "org.newmokee.winusbcreator",
             "--paths", str(source / "прога"), "--distpath", str(work / "dist"),
             "--workpath", str(work / "build"), "--specpath", str(work),
@@ -87,6 +97,14 @@ def main():
         docs.mkdir(parents=True, exist_ok=True)
         for name in ("LICENSE", "README.md"):
             shutil.copyfile(source / name, docs / name)
+        aria_prefix = Path(aria).resolve().parents[1]
+        for name in ("COPYING", "LICENSE", "LICENSE.txt"):
+            if (aria_prefix / name).is_file():
+                shutil.copyfile(aria_prefix / name, docs / ("aria2-" + name))
+        aria_version = subprocess.check_output([aria, "--no-conf=true", "--version"], text=True)
+        (docs / "aria2-source.txt").write_text(
+            aria_version + "\nCorresponding aria2 source releases: https://github.com/aria2/aria2/releases\n",
+            encoding="utf-8")
         shutil.copyfile(source / "packaging/macos/README-macOS.txt", docs / "README-macOS.txt")
         for item in (Path(sys.base_prefix) / "Resources/English.lproj/Documentation/LICENSE.txt",
                      Path(sys.base_prefix) / "LICENSE.txt", Path(sys.base_prefix) / "LICENSE"):

@@ -2,7 +2,7 @@
 """Build a native x86_64 or aarch64 AppImage with bundled Python and Tcl/Tk.
 
 Run inside Debian 12 (glibc 2.36), using a venv with PyInstaller==6.22.3.
-Required packages: python3-venv, python3-tk, libpython3.11, binutils, ca-certificates.
+Required packages: python3-venv, python3-tk, libpython3.11, binutils, ca-certificates, aria2.
 Disk utilities and polkit deliberately remain host system dependencies.
 """
 from __future__ import annotations
@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import platform
 import shutil
+import struct
 import subprocess
 import sys
 import tempfile
@@ -81,6 +82,16 @@ def copy(source, destination, executable=False):
     destination.chmod(0o755 if executable else 0o644)
 
 
+def verify_elf_architecture(path, architecture):
+    """Refuse a helper from another architecture, including emulated builders."""
+    with Path(path).open("rb") as stream:
+        header = stream.read(64)
+    expected = {"x86_64": 62, "aarch64": 183}[architecture]
+    if (len(header) < 20 or header[:6] != b"\x7fELF\x02\x01"
+            or struct.unpack_from("<H", header, 18)[0] != expected):
+        raise RuntimeError(f"Expected native {architecture} ELF64 helper: {path}")
+
+
 def build(source, output, work):
     architecture = native_architecture()
     libc, libc_version = platform.libc_ver()
@@ -91,6 +102,14 @@ def build(source, output, work):
         raise RuntimeError(f"Install PyInstaller=={PYINSTALLER_VERSION}; found {version}")
     import tkinter  # Fail early if the build interpreter cannot bundle Tcl/Tk.
 
+    aria = shutil.which("aria2c")
+    if not aria:
+        raise RuntimeError("Install the native Debian aria2 package before building")
+    verify_elf_architecture(aria, architecture)
+    aria_version = subprocess.check_output([aria, "--version"], text=True)
+    if "BitTorrent" not in aria_version:
+        raise RuntimeError("Bundled aria2 must support BitTorrent")
+
     for name, (url, digest) in downloads_for(architecture).items():
         download_verified(url, digest, work / name)
     tool = work / "appimagetool.AppImage"
@@ -99,12 +118,14 @@ def build(source, output, work):
     subprocess.run([
         sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir",
         "--name", "flash-usb", "--paths", str(source / "прога"),
+        "--add-binary", f"{aria}:.",
         "--distpath", str(dist), "--workpath", str(work / "pyinstaller"),
         "--specpath", str(work), str(source / "packaging/appimage/entry.py"),
     ], check=True, cwd=work)
 
     appdir = work / "AppDir"
     shutil.copytree(dist / "flash-usb", appdir / "usr/lib/flash-usb")
+    verify_elf_architecture(appdir / "usr/lib/flash-usb/_internal/aria2c", architecture)
     appdir.chmod(0o755)
     copy(source / "packaging/appimage/AppRun", appdir / "AppRun", True)
     copy(source / "packaging/flash-usb.desktop", appdir / "flash-usb.desktop")

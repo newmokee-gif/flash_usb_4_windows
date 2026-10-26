@@ -1,18 +1,21 @@
 WinUSB Creator for macOS 15 or newer
 
-Choose AppleSilicon for M-series Macs, Intel for Intel Macs. Extract the ZIP,
+Choose AppleSilicon for M-series Macs, Intel for Intel Macs. Open the DMG,
 then move the complete "WinUSB Creator.app" bundle to Applications.
-Python and Tk are bundled. Install the external WIM tool with Homebrew:
+Python, Tk and native aria2 are bundled. Install the external Windows WIM tool with Homebrew:
 
     brew install wimlib
 
-The application creates a Windows UEFI installer on a selected USB drive.
+The startup chooser selects Windows or GNU/Linux installation media.
+Windows mode creates a Windows UEFI installer on a selected USB drive.
+GNU/Linux mode downloads verified official images and writes them raw,
+then reads the bytes back for verification. Torrent downloads take priority.
 It does not install macOS and does not enable native Windows USB boot on
 Apple Silicon. Windows target hardware still needs compatible UEFI/drivers.
 Writing erases the selected USB. Unmount its volumes before selecting it.
 Administrator authorization is required only for writing.
 
-This prerelease has an ad-hoc integrity signature, not a Developer ID
+This application has an ad-hoc integrity signature, not a Developer ID
 signature or Apple notarization. If Gatekeeper blocks opening the app,
 use the supported Open Anyway action in System Settings > Privacy & Security
 after checking the published SHA-256 and deciding to trust this download.

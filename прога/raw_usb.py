@@ -217,14 +217,21 @@ class _MacClaim:
             fn = getattr(self.da, name)
             fn.argtypes, fn.restype = args, result
         self.cf.CFRunLoopGetCurrent.restype = void
+        self.cf.CFRunLoopGetCurrent.argtypes = []
         self.cf.CFRunLoopRunInMode.argtypes = [void, c.c_double, c.c_bool]
         self.cf.CFRunLoopRunInMode.restype = c.c_int32
         self.cf.CFRelease.argtypes = [void]
+        self.cf.CFRelease.restype = None
+        self.cf.CFCopyDescription.argtypes = [void]
+        self.cf.CFCopyDescription.restype = void
+        self.cf.CFStringGetCString.argtypes = [void, void, c.c_long, c.c_uint32]
+        self.cf.CFStringGetCString.restype = c.c_bool
         self.mode = void.in_dll(self.cf, "kCFRunLoopDefaultMode")
         self.loop = self.cf.CFRunLoopGetCurrent()
         self.session = self.disk = None
         self.claimed = self.done = self.registered = self.scheduled = False
         self.claim_status = None
+        self.runloop_results = {}
         self.approval = c.CFUNCTYPE(void, void, void)(self._approve)
         self.release = c.CFUNCTYPE(void, void, void)(lambda disk, ctx: self._deny())
         self.callback = c.CFUNCTYPE(None, void, void, void)(self._claimed)
@@ -253,6 +260,18 @@ class _MacClaim:
     def pump(self):
         self.cf.CFRunLoopRunInMode(self.mode, 0.001, False)
 
+    def _description(self, obj):
+        description = self.cf.CFCopyDescription(obj)
+        if not description:
+            return "unavailable"
+        try:
+            buffer = self.c.create_string_buffer(2048)
+            if self.cf.CFStringGetCString(description, buffer, len(buffer), 0x08000100):
+                return buffer.value.decode("utf-8", "replace")
+            return "unavailable"
+        finally:
+            self.cf.CFRelease(description)
+
     def __enter__(self):
         try:
             self.session = self.da.DASessionCreate(None)
@@ -266,8 +285,15 @@ class _MacClaim:
             self.da.DADiskClaim(self.disk, 0, self.release, None, self.callback, None)
             deadline = time.monotonic() + 10
             while not self.done and time.monotonic() < deadline:
-                self.cf.CFRunLoopRunInMode(self.mode, 0.05, False)
-            _require(self.done, "DiskArbitration claim timed out without invoking its completion callback")
+                result = self.cf.CFRunLoopRunInMode(self.mode, 0.05, False)
+                self.runloop_results[result] = self.runloop_results.get(result, 0) + 1
+                if result == 1:  # kCFRunLoopRunFinished: no scheduled sources.
+                    break
+            if not self.done:
+                raise USBError("DiskArbitration claim timed out without invoking its completion callback; "
+                               f"runloop results={self.runloop_results} "
+                               "(1=no sources, 2=stopped, 3=timed out, 4=source handled); "
+                               f"mode={self._description(self.mode)}; session={self._description(self.session)}")
             statuses = {0xF8DA0002: "busy", 0xF8DA0004: "exclusive access held by another client",
                         0xF8DA0006: "disk not found", 0xF8DA0008: "claim release not permitted",
                         0xF8DA0009: "not privileged", 0xF8DA000A: "disk not ready"}

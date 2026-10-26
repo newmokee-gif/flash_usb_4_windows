@@ -14,6 +14,40 @@ EXPECTED = {
     "flash-usb-v0.3.0-x86_64.AppImage", "flash-usb-v0.3.0-aarch64.AppImage",
     "flash-usb_0.3.0_all.deb", "flash-usb-0.3.0-1.noarch.rpm",
 }
+DESKTOP_MANIFESTS = {
+    "SHA256SUMS-Windows-x64.txt": "WinUSB-Creator-Windows-x64.exe",
+    "SHA256SUMS-Windows-ARM64.txt": "WinUSB-Creator-Windows-ARM64.exe",
+    "SHA256SUMS-macOS-Intel.txt": "WinUSB-Creator-macOS-Intel.dmg",
+    "SHA256SUMS-macOS-AppleSilicon.txt": "WinUSB-Creator-macOS-AppleSilicon.dmg",
+}
+
+
+def validate_inputs(builds):
+    """Require every native build and its exact per-platform checksum mapping."""
+    require(builds.is_dir() and not builds.is_symlink(), "Unsafe artifact directory")
+    expected = EXPECTED | set(DESKTOP_MANIFESTS)
+    actual = {p.name for p in builds.iterdir()}
+    require(actual == expected,
+            f"Incomplete release: {expected - actual}, unexpected: {actual - expected}")
+    for name in sorted(expected):
+        path = builds / name
+        require(path.is_file() and not path.is_symlink() and path.stat().st_size > 0,
+                f"Unsafe or empty artifact: {name}")
+    for manifest, artifact in DESKTOP_MANIFESTS.items():
+        entries = verify_manifest(builds / manifest, builds)
+        require(set(entries) == {artifact}, f"Incorrect checksum coverage: {manifest}")
+    # Linux build workflows do not emit individual manifests; their bytes are
+    # retained here and included in the aggregate release SHA256SUMS below.
+    return {name: sha256(builds / name) for name in sorted(expected)}
+
+
+def verify_staged(output, expected_hashes):
+    require({p.name for p in output.iterdir()} == set(expected_hashes),
+            "Staged artifact set changed")
+    for name, digest in expected_hashes.items():
+        path = output / name
+        require(path.is_file() and not path.is_symlink() and sha256(path) == digest,
+                f"Staged artifact differs from verified build: {name}")
 
 
 def main():
@@ -31,15 +65,13 @@ def main():
     old = public[0]
     require(not old.get("immutable"), "Previous release is immutable")
     builds = root / "desktop-dist"
-    actual = {p.name for p in builds.iterdir() if not p.name.startswith("SHA256SUMS-")}
-    require(actual == EXPECTED, f"Incomplete release: {EXPECTED - actual}, unexpected: {actual - EXPECTED}")
-    for manifest in builds.glob("SHA256SUMS-*.txt"):
-        verify_manifest(manifest, builds)
+    verified_hashes = validate_inputs(builds)
     output = root / "release-v0.3.0"
     output.mkdir()
     for p in builds.iterdir():
         require(p.is_file() and not p.is_symlink(), "Unsafe artifact")
         shutil.copyfile(p, output / p.name)
+    verify_staged(output, verified_hashes)
     provenance = {"source_commit": commit, "tag": TAG,
                   "workflow_run": os.environ.get("GITHUB_RUN_ID"),
                   "artifacts": {p.name: {"sha256": sha256(p), "size": p.stat().st_size}

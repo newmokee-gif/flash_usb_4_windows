@@ -9,9 +9,9 @@ from html.parser import HTMLParser
 import json
 import re
 import threading
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, unquote
 
-from image_download import DownloadError, fetch, checksum_from_manifest
+from image_download import DownloadError, fetch, checksum_from_manifest, torrent_target
 
 
 @dataclass(frozen=True)
@@ -33,6 +33,7 @@ class DistroImage:
     api_json_url: str = ""
     release_pointer_url: str = ""
     publisher_page_url: str = ""
+    sha512: str | None = None
 
 
 def channel(id, name, edition, arch, base, pattern, manifest="SHA256SUMS", *, torrent="", algorithm="sha256", checksum_pattern="", suffix=""):
@@ -84,8 +85,8 @@ for arch, debarch, rpmarch, nixarch in (("x64", "amd64", "x86_64", "x86_64"), ("
             checksum_url=("https://download.opensuse.org/tumbleweed/iso/" if arch == "x64" else "https://download.opensuse.org/ports/aarch64/tumbleweed/iso/") + f"openSUSE-Tumbleweed-NET-{rpmarch}-Current.iso.sha256", filename=f"openSUSE-Tumbleweed-NET-{rpmarch}-Current.iso"),
     ]
     name = f"latest-nixos-minimal-{nixarch}-linux.iso"
-    _entries.append(DistroImage(f"nixos-{key}", "NixOS", "25.05 Minimal", arch,
-        f"https://channels.nixos.org/nixos-25.05/{name}", checksum_url=f"https://channels.nixos.org/nixos-25.05/{name}.sha256", filename=name))
+    _entries.append(DistroImage(f"nixos-{key}", "NixOS", "26.05 Minimal", arch,
+        f"https://channels.nixos.org/nixos-26.05/{name}", checksum_url=f"https://channels.nixos.org/nixos-26.05/{name}.sha256", filename=name))
 
 CATALOG = tuple(_entries)
 
@@ -150,7 +151,19 @@ def _digest(text, filename, algorithm, *, per_image=False):
     return checksum_from_manifest(text, filename, algorithm)
 
 
-def resolve_image(entry):
+def _gentoo_sha512(text, filename):
+    """DIGESTS also contains BLAKE2B with the same hexadecimal length."""
+    active = False
+    lines = []
+    for line in text.splitlines():
+        if line.startswith("#"):
+            active = line.strip() == "# SHA512 HASH"
+        elif active:
+            lines.append(line)
+    return checksum_from_manifest("\n".join(lines), filename, "sha512")
+
+
+def _resolve_image(entry):
     """Resolve official metadata to one image whose exact checksum is known."""
     _trace.url, _trace.text = "", ""
     if entry.release_pointer_url:
@@ -161,8 +174,9 @@ def resolve_image(entry):
         url = urljoin(entry.image_url, names[0])
         filename = names[0].rsplit("/", 1)[-1]
         checksum_url = url + ".DIGESTS"
-        checksum_from_manifest(_metadata(checksum_url), filename, entry.checksum_algorithm)
-        return replace(entry, image_url=url, filename=filename, checksum_url=checksum_url, release_pointer_url="")
+        digest = _gentoo_sha512(_metadata(checksum_url), filename)
+        return replace(entry, image_url=url, filename=filename, checksum_url=checksum_url,
+                       release_pointer_url="", sha512=digest)
     if entry.publisher_page_url:
         parser = _Links()
         parser.feed(_metadata(entry.publisher_page_url))
@@ -236,3 +250,47 @@ def resolve_image(entry):
     return replace(entry, image_url=image_url, filename=filename, checksum_url=checksum_url,
                    torrent_url=torrent, sha256=digest if entry.checksum_algorithm == "sha256" else None,
                    pattern="", checksum_pattern="", checksum_suffix="", torrent_template="")
+
+
+def discover_torrent(image):
+    """Prefer a publisher-advertised torrent containing this exact ISO.
+
+    Some publishers offer a release-wide torrent rather than one per ISO.
+    Validate its metadata first; the downloader selects only the matching file.
+    Failure leaves the already verified official HTTPS source usable.
+    """
+    if image.torrent_url:
+        return image
+    indexes = {
+        "gentoo": "https://torrents.gentoo.org/",
+        "mageia": "https://torrent.mageia.org/",
+        "bodhi": "https://sourceforge.net/projects/bodhilinux/files/7.0.0/",
+    }
+    index = indexes.get(image.id, urljoin(image.image_url, "."))
+    try:
+        parser = _Links()
+        parser.feed(fetch(index, limit=4 * 1024 * 1024).decode("utf-8", errors="replace"))
+        candidates = []
+        for link in parser.links:
+            url = urljoin(index, link)
+            parsed = urlsplit(url)
+            path = unquote(parsed.path).removesuffix("/download")
+            name = path.rsplit("/", 1)[-1]
+            if parsed.scheme != "https" or not name.endswith(".torrent"):
+                continue
+            prefix = name.removesuffix(".torrent")
+            if prefix and image.filename.startswith(prefix):
+                candidates.append((len(prefix), url))
+        for _, url in sorted(set(candidates), reverse=True)[:3]:
+            try:
+                torrent_target(fetch(url, limit=8 * 1024 * 1024), image.filename)
+                return replace(image, torrent_url=url)
+            except Exception:
+                continue
+    except Exception:
+        pass
+    return image
+
+
+def resolve_image(entry):
+    return discover_torrent(_resolve_image(entry))

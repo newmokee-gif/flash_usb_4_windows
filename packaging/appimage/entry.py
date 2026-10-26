@@ -8,6 +8,7 @@ from linux_gui import LinuxUSB, build_write_command
 from linux_usb import Device, main as cli_main, subprocess_environment
 import platform_selector
 import raw_usb
+import image_download
 from gnu_linux_gui import GNULinuxUSB
 
 
@@ -17,6 +18,19 @@ def self_test():
 
     if not getattr(sys, "frozen", False):
         raise RuntimeError("This diagnostic must run from the bundled executable")
+    import certifi
+    import ssl
+    context = ssl.create_default_context(cafile=certifi.where())
+    if not context.get_ca_certs():
+        raise RuntimeError("The AppImage must include trusted public TLS roots")
+    aria = image_download.bundled_aria2()
+    if aria is None:
+        raise RuntimeError("The AppImage must include its own native aria2c")
+    result = subprocess.run([aria, "--version"], env=image_download.aria_environment(aria),
+                            capture_output=True, text=True, timeout=30, check=True)
+    if "BitTorrent" not in result.stdout:
+        raise RuntimeError("The bundled aria2c has no BitTorrent support")
+    print("Bundled native aria2c: BitTorrent support passed")
     deadline = time.monotonic() + 10
     while True:
         try:

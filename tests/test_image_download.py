@@ -12,6 +12,7 @@ import tempfile
 import threading
 import types
 import unittest
+import zipfile
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "прога"))
@@ -186,6 +187,20 @@ class DownloadWorkflowTests(unittest.TestCase):
             result = download.download_image(self.image, self.directory)
         self.assertEqual(result.sha256, self.sha)
 
+    def test_resolved_sha512_does_not_reparse_multi_algorithm_manifest(self):
+        self.image.pop("sha256")
+        self.image.update(sha512=hashlib.sha512(self.content).hexdigest(), checksum_algorithm="sha512",
+                          checksum_url="https://official.example/linux.iso.DIGESTS")
+        requests = []
+        def fetch(url, destination=None, **kwargs):
+            requests.append(url)
+            self.assertIsNotNone(destination)
+            return self.fetch(url, destination, **kwargs)
+        with patch.object(download, "fetch", side_effect=fetch), patch.object(download, "find_aria2", return_value=None):
+            result = download.download_image(self.image, self.directory)
+        self.assertEqual(result.sha256, self.sha)
+        self.assertEqual(requests, [self.image["image_url"]])
+
     def test_source_swap_before_publication_refused(self):
         original_link = os.link
         def replace_then_link(source, target):
@@ -223,6 +238,67 @@ class WindowsAriaTests(unittest.TestCase):
                 data[68:70] = b"\x64\xaa"
                 candidate.write_bytes(data)
                 self.assertEqual(download.find_aria2(), str(candidate))
+
+    def test_verified_bootstrap_and_cache_revalidation(self):
+        binary = bytearray(70)
+        binary[:2] = b"MZ"
+        struct.pack_into("<I", binary, 0x3C, 64)
+        binary[64:70] = b"PE\0\0\x64\x86"
+        archive_data = io.BytesIO()
+        with zipfile.ZipFile(archive_data, "w") as archive:
+            archive.writestr(download.ARIA2_X64_MEMBER, binary)
+            for name in ("COPYING", "LICENSE.OpenSSL", "README.mingw"):
+                archive.writestr("aria2-1.37.0-win-64bit-build1/" + name, "license")
+        archive_bytes = archive_data.getvalue()
+        def fetch(url, path, **kwargs):
+            self.assertEqual(url, download.ARIA2_X64_URL)
+            Path(path).write_bytes(archive_bytes)
+        with tempfile.TemporaryDirectory() as temp, patch.object(download.sys, "platform", "win32"), \
+                patch.dict(os.environ, {"LOCALAPPDATA": temp}), patch.object(download, "find_aria2", return_value=None), \
+                patch.object(download, "windows_arm64", return_value=False), patch.object(download, "fetch", side_effect=fetch) as get, \
+                patch.object(download, "ARIA2_X64_ARCHIVE_SHA256", hashlib.sha256(archive_bytes).hexdigest()), \
+                patch.object(download, "ARIA2_X64_EXE_SHA256", hashlib.sha256(binary).hexdigest()):
+            executable = Path(download.ensure_windows_aria2())
+            self.assertEqual(executable.read_bytes(), binary)
+            self.assertEqual(get.call_count, 1)
+            self.assertEqual(download.ensure_windows_aria2(), str(executable))
+            self.assertEqual(get.call_count, 1)
+            executable.write_bytes(b"modified cached executable")
+            self.assertEqual(download.ensure_windows_aria2(), str(executable))
+            self.assertEqual(get.call_count, 2)
+            self.assertEqual(executable.read_bytes(), binary)
+
+    def test_wrong_bootstrap_hash_never_publishes_executable(self):
+        with tempfile.TemporaryDirectory() as temp, patch.object(download.sys, "platform", "win32"), \
+                patch.dict(os.environ, {"LOCALAPPDATA": temp}), patch.object(download, "find_aria2", return_value=None), \
+                patch.object(download, "windows_arm64", return_value=False), \
+                patch.object(download, "fetch", side_effect=lambda url, path, **kwargs: Path(path).write_bytes(b"not upstream archive")):
+            with self.assertRaises(download.DownloadError):
+                download.ensure_windows_aria2()
+            self.assertEqual(list(Path(temp).rglob("*.exe")), [])
+
+    def test_arm_emulation_requires_consent_and_windows11(self):
+        with patch.object(download.sys, "platform", "win32"), patch.object(download, "find_aria2", return_value=None), \
+                patch.object(download, "windows_arm64", return_value=True), patch.object(download, "fetch") as get:
+            with self.assertRaises(download.DownloadError):
+                download.ensure_windows_aria2(allow_emulation=False)
+            with patch.object(download.sys, "getwindowsversion", create=True, return_value=types.SimpleNamespace(build=19045)):
+                with self.assertRaises(download.DownloadError):
+                    download.ensure_windows_aria2(allow_emulation=True)
+            get.assert_not_called()
+
+
+class BundledAriaTests(unittest.TestCase):
+    def test_frozen_linux_prefers_bundled_client_with_bundled_libraries(self):
+        with tempfile.TemporaryDirectory() as temp:
+            client = Path(temp) / "aria2c"
+            client.write_bytes(b"native fixture")
+            client.chmod(0o755)
+            with patch.object(download.sys, "platform", "linux"), patch.object(download.sys, "frozen", True, create=True), \
+                    patch.object(download.sys, "_MEIPASS", temp, create=True), patch.dict(os.environ, {"LD_LIBRARY_PATH": "/old-private", "LD_LIBRARY_PATH_ORIG": "/system-extra"}):
+                self.assertEqual(download.find_aria2(), str(client.resolve()))
+                self.assertEqual(download.aria_environment(str(client))["LD_LIBRARY_PATH"], str(Path(temp).resolve()))
+                self.assertEqual(download.aria_environment("/usr/bin/aria2c")["LD_LIBRARY_PATH"], "/system-extra")
 
 
 class GNUCommandTests(unittest.TestCase):

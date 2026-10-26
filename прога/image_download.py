@@ -16,6 +16,13 @@ import tempfile
 import threading
 import urllib.parse
 import urllib.request
+import zipfile
+
+
+ARIA2_X64_URL = "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip"
+ARIA2_X64_ARCHIVE_SHA256 = "67d015301eef0b612191212d564c5bb0a14b5b9c4796b76454276a4d28d9b288"
+ARIA2_X64_EXE_SHA256 = "be2099c214f63a3cb4954b09a0becd6e2e34660b886d4c898d260febfe9d70c2"
+ARIA2_X64_MEMBER = "aria2-1.37.0-win-64bit-build1/aria2c.exe"
 
 
 class DownloadError(RuntimeError):
@@ -57,7 +64,7 @@ def _cancelled(event):
 def fetch(url, destination=None, *, cancelled=None, limit=None, log=lambda _: None):
     """Download HTTPS with bounded metadata and an interruptible streaming body."""
     request = urllib.request.Request(https_url(url), headers={"User-Agent": "WinUSB-Creator/0.3"})
-    if sys.platform == "darwin" and getattr(sys, "frozen", False):
+    if sys.platform != "win32" and getattr(sys, "frozen", False):
         import certifi
         context = ssl.create_default_context(cafile=certifi.where())
     else:
@@ -254,9 +261,12 @@ def download_torrent(url, filename, directory, aria, *, cancelled=None):
                "--dir=" + str(directory)]
     if selection is not None:
         command.append(f"--select-file={selection}")
+    if sys.platform != "win32" and getattr(sys, "frozen", False):
+        import certifi
+        command.append("--ca-certificate=" + certifi.where())
     command.append(str(meta))
     with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                          env=runtime_environment(),
+                          env=aria_environment(aria),
                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if sys.platform == "win32" else 0) as process:
         try:
             while True:
@@ -304,15 +314,38 @@ def file_hashes(path, algorithm, *, cancelled=None):
     return {name: digest.hexdigest() for name, digest in digests.items()}
 
 
+def windows_arm64():
+    import platform
+    return os.environ.get("PROCESSOR_ARCHITEW6432", platform.machine()).lower() in ("arm64", "aarch64")
+
+
+def bundled_aria2():
+    if getattr(sys, "frozen", False) and sys.platform != "win32" and hasattr(sys, "_MEIPASS"):
+        base = Path(sys._MEIPASS).resolve()
+        candidate = base / "aria2c"
+        if candidate.is_file() and os.access(candidate, os.X_OK) and base in candidate.resolve().parents:
+            return str(candidate)
+    return None
+
+
+def aria_environment(executable):
+    env = runtime_environment()
+    bundled = bundled_aria2()
+    if sys.platform.startswith("linux") and bundled and Path(executable).resolve() == Path(bundled).resolve():
+        env["LD_LIBRARY_PATH"] = str(Path(sys._MEIPASS).resolve())
+    return env
+
+
 def find_aria2():
+    bundled = bundled_aria2()
+    if bundled:
+        return bundled
     candidates = []
     executable = shutil.which("aria2c")
     if executable:
         candidates.append(Path(executable))
     if sys.platform == "win32":
-        import platform
-        native = os.environ.get("PROCESSOR_ARCHITEW6432", platform.machine()).lower()
-        arm = native in ("arm64", "aarch64")
+        arm = windows_arm64()
         folder = "win_usb_tools_arm64" if arm else "win_usb_tools"
         candidates.append(Path(tempfile.gettempdir(), folder, "aria2c.exe"))
         expected = 0xAA64 if arm else 0x8664
@@ -331,7 +364,63 @@ def find_aria2():
     return str(candidates[0]) if candidates else None
 
 
-def download_image(image, destination, *, log=lambda _: None, cancelled=None):
+def ensure_windows_aria2(*, log=lambda _: None, cancelled=None, allow_emulation=False):
+    """Provision the exact upstream helper; the ARM64 application stays native."""
+    if sys.platform != "win32":
+        raise DownloadError("Автоматическая установка этого aria2 доступна только в Windows.")
+    native = find_aria2()
+    if native:
+        return native
+    if windows_arm64():
+        if not allow_emulation or sys.getwindowsversion().build < 22000:
+            raise DownloadError("Нативный aria2 ARM64 не найден; x64-помощник требует согласия и Windows 11 ARM64.")
+        log("aria2 x64 будет работать через эмуляцию Windows 11 ARM64; само приложение остаётся ARM64.")
+    cache = Path(os.environ.get("LOCALAPPDATA", tempfile.gettempdir())) / "WinUSB Creator/tools/aria2/1.37.0-x64"
+    cache.mkdir(parents=True, exist_ok=True)
+    executable = cache / "aria2c.exe"
+    archive_cache = cache / "upstream.zip"
+
+    def verified_cache():
+        return (executable.is_file() and not executable.is_symlink()
+                and archive_cache.is_file() and not archive_cache.is_symlink()
+                and file_hash(archive_cache, "sha256", cancelled=cancelled) == ARIA2_X64_ARCHIVE_SHA256
+                and file_hash(executable, "sha256", cancelled=cancelled) == ARIA2_X64_EXE_SHA256)
+
+    if verified_cache():
+        log("Проверен сохранённый aria2 1.37.0 (SHA-256 архива и EXE).")
+        return str(executable)
+    log("Установка встроенного torrent-помощника aria2 из официального выпуска GitHub…")
+    with tempfile.TemporaryDirectory(prefix=".aria2-", dir=cache) as work:
+        directory = Path(work)
+        archive_path = directory / "upstream.zip"
+        fetch(ARIA2_X64_URL, archive_path, cancelled=cancelled, limit=16 * 1024 * 1024)
+        if file_hash(archive_path, "sha256", cancelled=cancelled) != ARIA2_X64_ARCHIVE_SHA256:
+            raise DownloadError("SHA-256 архива aria2 не совпадает; запуск запрещён.")
+        with zipfile.ZipFile(archive_path) as archive:
+            if archive.namelist().count(ARIA2_X64_MEMBER) != 1:
+                raise DownloadError("В архиве нет однозначного aria2c.exe.")
+            content = archive.read(ARIA2_X64_MEMBER)
+            if hashlib.sha256(content).hexdigest() != ARIA2_X64_EXE_SHA256:
+                raise DownloadError("SHA-256 aria2c.exe не совпадает; запуск запрещён.")
+            if len(content) < 64 or content[:2] != b"MZ":
+                raise DownloadError("Неверный PE aria2c.exe.")
+            offset = struct.unpack_from("<I", content, 0x3C)[0]
+            if content[offset:offset + 6] != b"PE\0\0\x64\x86":
+                raise DownloadError("Неверная архитектура aria2c.exe.")
+            staged = directory / "aria2c.exe"
+            staged.write_bytes(content)
+            for filename in ("COPYING", "LICENSE.OpenSSL", "README.mingw"):
+                (cache / filename).write_bytes(archive.read("aria2-1.37.0-win-64bit-build1/" + filename))
+        _cancelled(cancelled)
+        os.replace(archive_path, archive_cache)
+        os.replace(staged, executable)
+    if not verified_cache():
+        raise DownloadError("Повторная проверка установленного aria2 не прошла.")
+    return str(executable)
+
+
+def download_image(image, destination, *, log=lambda _: None, cancelled=None,
+                   provision_aria=False, allow_emulated_aria=False):
     image_url = https_url(value(image, "image_url"))
     filename = value(image, "filename") or value(image, "image_name") or urllib.parse.unquote(PurePosixPath(urllib.parse.urlsplit(image_url).path).name)
     _safe_part(filename.encode("utf-8"))
@@ -341,6 +430,9 @@ def download_image(image, destination, *, log=lambda _: None, cancelled=None):
     digest = value(image, "sha256")
     if digest:
         algorithm = "sha256"
+    elif value(image, "sha512"):
+        algorithm = "sha512"
+        digest = value(image, "sha512")
     else:
         manifest = fetch(value(image, "checksum_url"), limit=8 * 1024 * 1024, cancelled=cancelled)
         digest = checksum_from_manifest(manifest.decode("utf-8-sig"), filename, algorithm)
@@ -357,6 +449,13 @@ def download_image(image, destination, *, log=lambda _: None, cancelled=None):
         directory = Path(work)
         torrent = value(image, "torrent_url")
         aria = find_aria2()
+        if torrent and not aria and provision_aria and sys.platform == "win32":
+            try:
+                aria = ensure_windows_aria2(log=log, cancelled=cancelled, allow_emulation=allow_emulated_aria)
+            except Cancelled:
+                raise
+            except (DownloadError, OSError, zipfile.BadZipFile) as exc:
+                log(f"Не удалось подготовить torrent-помощник: {exc}. Используется официальный HTTPS-источник.")
         downloaded = None
         if torrent and aria:
             log("Загрузка официального torrent через aria2. Раздача после загрузки отключена.")

@@ -49,7 +49,7 @@ def verify_private_virtual_disk(image, device):
     return sector
 
 
-def exercise(image, read_only):
+def exercise(image, read_only, native_probe):
     mount = image.parent / ("readonly-mount" if read_only else "writable-mount")
     mount.mkdir()
     # Normal attachment lets DiskArbitration observe a recognizable filesystem.
@@ -76,6 +76,10 @@ def exercise(image, read_only):
         with open(device, "rb", buffering=0) as source:
             first_sector = source.read(sector)
         print(f"Claiming {'readonly' if read_only else 'writable'} unmounted FAT32 virtual image", flush=True)
+        native = subprocess.run([str(native_probe), device], text=True, capture_output=True, timeout=20)
+        print(native.stdout, end="", flush=True)
+        if native.stderr:
+            print(native.stderr, end="", flush=True)
         with raw_usb._MacClaim(device) as claim:
             claim.pump()
             flags = (os.O_RDONLY if read_only else os.O_RDWR) | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC
@@ -101,6 +105,8 @@ def exercise(image, read_only):
                 claim.pump()
             finally:
                 os.close(descriptor)
+        if native.returncode:
+            raise RuntimeError("Native C comparison could not claim the validated private virtual image")
     finally:
         subprocess.run(["/usr/bin/hdiutil", "detach", device], check=True)
 
@@ -110,14 +116,18 @@ def main():
         raise RuntimeError("Run with native macOS Python and sudo")
     work = Path(tempfile.mkdtemp(prefix="winusb-raw-virtual-smoke-"))
     image = work / "fixture.sparseimage"
+    native_probe = work / "claim-probe"
+    subprocess.run(["/usr/bin/clang", "-Wall", "-Wextra", "-o", str(native_probe),
+                    str(Path(__file__).with_name("macos_claim_probe.c")),
+                    "-framework", "DiskArbitration", "-framework", "CoreFoundation"], check=True)
     # The filesystem is created inside a new private regular image file only.
     subprocess.run(["/usr/bin/hdiutil", "create", "-type", "SPARSE", "-size", "128m",
                     "-layout", "MBRSPUD", "-fs", "FAT32", "-volname", "WINUSBRAW", str(image)], check=True)
     if not image.is_file() or image.is_symlink():
         raise RuntimeError("Generated fixture is not a regular file")
     try:
-        exercise(image, read_only=True)
-        exercise(image, read_only=False)
+        exercise(image, read_only=True, native_probe=native_probe)
+        exercise(image, read_only=False, native_probe=native_probe)
     except Exception:
         print(f"Virtual raw disk smoke failed; fixture retained at {work}", flush=True)
         raise

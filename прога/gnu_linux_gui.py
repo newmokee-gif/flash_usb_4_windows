@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import os
+import platform
 from pathlib import Path
 import queue
 import re
@@ -14,7 +15,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 import distro_catalog
-from image_download import Cancelled, DownloadError, download_image, runtime_environment, value
+from image_download import (Cancelled, DownloadError, download_image, runtime_environment, value,
+                            find_aria2, windows_arm64, ensure_windows_aria2)
 import raw_usb
 
 
@@ -54,6 +56,10 @@ class GNULinuxUSB:
         self.images = list(distro_catalog.CATALOG)
         self.matches = []
         self.destination = None
+        self.aria_emulation_allowed = False
+        if sys.platform in ("win32", "darwin"):
+            from package_manager_ui import add_buttons
+            add_buttons(root, busy=lambda: self.operation is not None)
         root.title("WinUSB Creator — ГНУ/Линукс")
         root.geometry("900x760")
         root.minsize(740, 650)
@@ -98,14 +104,18 @@ class GNULinuxUSB:
         self.write_button.pack(side="left", padx=8)
         self.cancel_button = ttk.Button(controls, text="Отменить загрузку", command=self.cancel, state="disabled")
         self.cancel_button.pack(side="left")
+        self.install_button = ttk.Button(controls, text="Установить зависимости", command=self.install_dependencies)
+        self.install_button.pack(side="left", padx=8)
         self.log = tk.Text(panel, height=10, state="disabled", wrap="word")
         self.log.pack(fill="both", expand=True, pady=(12, 0))
         self.controls = [self.download_button, self.auto_check, self.local_button, self.image_entry,
-                         self.hash_entry, self.refresh_button, self.write_button]
+                         self.hash_entry, self.refresh_button, self.write_button, self.install_button]
         if self.distro["values"]:
             self.distro.current(0)
             self.select_distro()
         self.append("ARM64 показывается только при наличии образа в каталоге. Образы для конкретной платы не равны универсальным ARM64 ISO.")
+        if sys.platform == "win32":
+            self.append("Windows: перед записью уберите буквы дисков и точки подключения всех разделов флешки через «Управление дисками» → «Изменить букву диска или путь». Не удаляйте разделы и не форматируйте диск. Затем нажмите «Обновить USB».")
         self.root.after(100, self.poll)
         self.refresh()
 
@@ -165,6 +175,7 @@ class GNULinuxUSB:
         if not destination:
             return
         image = self.matches[index]
+        allow_emulation = self.confirm_aria_emulation()
         self.cancelled.clear()
         self.set_operation("download")
         self.append(f"Выбрано: {value(image, 'distro')} / {value(image, 'edition')} / {value(image, 'architecture')}")
@@ -174,10 +185,77 @@ class GNULinuxUSB:
                 resolver = getattr(distro_catalog, "resolve_image", None)
                 resolved = resolver(image) if resolver else image
                 result = download_image(resolved, destination, cancelled=self.cancelled,
-                                        log=lambda line: self.events.put(("log", line)))
+                                        log=lambda line: self.events.put(("log", line)),
+                                        provision_aria=True, allow_emulated_aria=allow_emulation)
                 self.events.put(("downloaded", result))
             except Cancelled as exc:
                 self.events.put(("cancelled", str(exc)))
+            except Exception as exc:
+                self.events.put(("error", str(exc)))
+        threading.Thread(target=worker, daemon=False).start()
+
+    def confirm_aria_emulation(self):
+        if sys.platform != "win32" or not windows_arm64() or find_aria2():
+            return False
+        if self.aria_emulation_allowed:
+            return True
+        self.aria_emulation_allowed = messagebox.askyesno("Torrent-помощник для Windows ARM64",
+            "Нативный aria2 ARM64 не найден. Разрешить проверенный официальный aria2 x64 "
+            "через эмуляцию Windows 11 ARM64? Само приложение остаётся ARM64. "
+            "При отказе загрузка выполнится по HTTPS с сервера дистрибутива.", parent=self.root)
+        return self.aria_emulation_allowed
+
+    def install_dependencies(self):
+        if self.operation:
+            return
+        allow_emulation = self.confirm_aria_emulation()
+        commands = []
+        try:
+            if sys.platform != "win32":
+                from dependencies import commands as dependency_commands
+                system = platform.system()
+                distro = platform.freedesktop_os_release().get("ID", "") if system == "Linux" else ""
+                if system == "Darwin" and os.geteuid() == 0:
+                    raise RuntimeError("Homebrew нужно запускать от обычного пользователя, без sudo.")
+                for command in dependency_commands(system, distro, platform.machine()):
+                    executable = shutil.which(command[0], path="/usr/sbin:/usr/bin:/sbin:/bin:/opt/homebrew/bin:/usr/local/bin")
+                    if not executable:
+                        raise RuntimeError(f"Не найден {command[0]}. Для macOS сначала установите Homebrew кнопкой вверху.")
+                    command = [executable, *command[1:]]
+                    if system == "Linux" and os.geteuid() != 0:
+                        pkexec = shutil.which("pkexec", path="/usr/bin:/bin")
+                        if not pkexec:
+                            raise RuntimeError("Не найден pkexec. Установите зависимости командой install-deps из терминала через sudo.")
+                        command.insert(0, pkexec)
+                    # pacman must not wait for a terminal response in GUI. The
+                    # complete system upgrade is confirmed explicitly below.
+                    if command[0].endswith("pacman") or any(part.endswith("/pacman") for part in command):
+                        command.append("--noconfirm")
+                    commands.append(command)
+        except Exception as exc:
+            messagebox.showerror("Зависимости", str(exc), parent=self.root)
+            return
+        description = "Будет установлен проверенный официальный aria2 из GitHub." if sys.platform == "win32" else "Будут установлены зависимости программы:\n" + "\n".join(" ".join(command) for command in commands)
+        if sys.platform.startswith("linux") and any("-Syu" in command for command in commands):
+            description += "\nArch: это также полное обновление системы."
+        if not messagebox.askyesno("Установка зависимостей", description + "\nПродолжить?", parent=self.root):
+            return
+        self.set_operation("dependencies")
+        self.cancelled.clear()
+        def worker():
+            try:
+                if sys.platform == "win32":
+                    ensure_windows_aria2(log=lambda line: self.events.put(("log", line)),
+                                         cancelled=self.cancelled, allow_emulation=allow_emulation)
+                else:
+                    for command in commands:
+                        with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                              text=True, encoding="utf-8", errors="replace", env=runtime_environment()) as process:
+                            for line in process.stdout:
+                                self.events.put(("log", line.rstrip()))
+                            if process.wait():
+                                raise RuntimeError("Пакетный менеджер завершился с ошибкой. Подробности в журнале.")
+                self.events.put(("dependencies", None))
             except Exception as exc:
                 self.events.put(("error", str(exc)))
         threading.Thread(target=worker, daemon=False).start()
@@ -259,6 +337,9 @@ class GNULinuxUSB:
                     self.refresh()
                 elif kind == "cancelled":
                     self.append(payload)
+                elif kind == "dependencies":
+                    self.append("Установка зависимостей завершена. Теперь можно повторить загрузку через torrent.")
+                    messagebox.showinfo("Зависимости", "Установка завершена.", parent=self.root)
                 else:
                     self.append(payload)
                     messagebox.showerror("Ошибка", payload, parent=self.root)
