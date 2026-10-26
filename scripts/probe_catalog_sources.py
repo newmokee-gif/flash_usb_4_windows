@@ -5,7 +5,7 @@ import json
 import sys
 import urllib.request
 
-URLS = {
+PREVIOUS_URLS = {
     "artix": "https://download.artixlinux.org/iso/sha256sums",
     "endeavour": "https://mirror.alpix.eu/endeavouros/iso/EndeavourOS_Titan-Nova-2026.08.15.iso.sha512sum",
     "garuda": "https://iso.builds.garudalinux.org/iso/latest/garuda/dr460nized/",
@@ -33,6 +33,16 @@ URLS = {
     "puppy": "https://distro.ibiblio.org/puppylinux/puppy-bookwormpup/",
     "salix": "https://download.salixos.org/x86_64/15.0/iso/",
     "archcraft": "https://sourceforge.net/projects/archcraft/files/v26.08/",
+}
+URLS = {
+    "oracle": "https://linux.oracle.com/security/gpg/checksum/OracleLinux-R9-U8-Server-x86_64.checksum",
+    "q4os": "https://mirror.velden.media/isos/q4os/stable/",
+    "kaos": "https://sourceforge.net/projects/kaosx/files/ISO/",
+    "puppy": "https://distro.ibiblio.org/puppylinux/puppy-bookwormpup/BookwormPup64/",
+    "ultramarine": "https://ultramarine-linux.org/fyra-images/isos/ultramarine/44/ultramarine-plasma-44-live-anaconda-x86_64.iso.sha256sum",
+    "parrot": "https://download.parrot.sh/parrot/iso/7.4/signed-hashes.txt",
+    "peppermint": "https://downloads.sourceforge.net/project/peppermintos/isos/XFCE/PeppermintOS-Debian-64-sha512.checksum",
+    "rhino": "https://downloads.sourceforge.net/project/rhino-linux-builder/2026.1/Rhino-Linux-2026.1-amd64.iso.sha256",
 }
 
 class Links(HTMLParser):
