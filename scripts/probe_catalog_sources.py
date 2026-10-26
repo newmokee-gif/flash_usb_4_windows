@@ -35,14 +35,11 @@ PREVIOUS_URLS = {
     "archcraft": "https://sourceforge.net/projects/archcraft/files/v26.08/",
 }
 URLS = {
-    "oracle": "https://linux.oracle.com/security/gpg/checksum/OracleLinux-R9-U8-Server-x86_64.checksum",
-    "q4os": "https://mirror.velden.media/isos/q4os/stable/",
-    "kaos": "https://sourceforge.net/projects/kaosx/files/ISO/",
-    "puppy": "https://distro.ibiblio.org/puppylinux/puppy-bookwormpup/BookwormPup64/",
-    "ultramarine": "https://ultramarine-linux.org/fyra-images/isos/ultramarine/44/ultramarine-plasma-44-live-anaconda-x86_64.iso.sha256sum",
-    "parrot": "https://download.parrot.sh/parrot/iso/7.4/signed-hashes.txt",
-    "peppermint": "https://downloads.sourceforge.net/project/peppermintos/isos/XFCE/PeppermintOS-Debian-64-sha512.checksum",
-    "rhino": "https://downloads.sourceforge.net/project/rhino-linux-builder/2026.1/Rhino-Linux-2026.1-amd64.iso.sha256",
+    "puppy": "https://distro.ibiblio.org/puppylinux/puppy-bookwormpup/BookwormPup64/10.0.12/",
+    "gparted": "https://sourceforge.net/projects/gparted/files/gparted-live-stable/",
+    "clonezilla": "https://sourceforge.net/projects/clonezilla/files/clonezilla_live_stable/",
+    "mx-torrents": "https://sourceforge.net/projects/mx-linux/files/Final/Torrents/",
+    "oracle-arm": "https://linux.oracle.com/security/gpg/checksum/OracleLinux-R9-U8-Server-aarch64.checksum",
 }
 
 class Links(HTMLParser):
@@ -67,6 +64,8 @@ def probe(item):
             parser = Links(); parser.feed(content)
             links = list(dict.fromkeys(parser.links))
             relevant = [v for v in links if any(k in v.lower() for k in (".iso", "sha", "sum", "torrent", "2026", "2025"))]
+            if "sourceforge.net" in url:
+                relevant = [v for v in links if "/files/" in v and "/stats/" not in v]
             result = (relevant or links)[:30]
         else:
             result = content[:2400]
