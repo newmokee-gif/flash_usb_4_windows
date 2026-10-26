@@ -14,6 +14,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import urllib.request
 import zipfile
+from package_manager_ui import add_buttons
 
 ARIA2_URL = "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip"
 FIDO_URL = "https://raw.githubusercontent.com/pbatard/Fido/master/Fido.ps1"
@@ -264,6 +265,7 @@ class WindowsOneClickUSB:
         self.root.destroy()
 
     def build_ui(self):
+        add_buttons(self.root, busy=lambda: self.is_busy)
         pad = {"padx": 15, "pady": 4}
 
         folder_frame = tk.Frame(self.root, bg="#e9f5ff")

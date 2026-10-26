@@ -8,6 +8,9 @@ import sys
 def main():
     source = Path(__file__).resolve().parent / "прога"
     sys.path.insert(0, str(source))
+    if sys.argv[1:] == ["install-deps"]:
+        from dependencies import main as install_main
+        return install_main()
     if sys.platform == "win32":
         runpy.run_path(str(source / "V2.py"), run_name="__main__")
     elif sys.platform.startswith("linux"):

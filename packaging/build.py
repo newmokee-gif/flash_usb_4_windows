@@ -30,7 +30,7 @@ def copy_file(source: Path, destination: Path, executable=False):
 
 def stage_payload(source: Path, stage: Path, epoch: int):
     app = stage / "usr/share/flash-usb"
-    for name in ("flash_usb.py", "прога/linux_usb.py", "прога/linux_gui.py"):
+    for name in ("flash_usb.py", "прога/linux_usb.py", "прога/linux_gui.py", "прога/dependencies.py"):
         copy_file(source / name, app / name)
     copy_file(source / "packaging/flash-usb", stage / "usr/bin/flash-usb", True)
     copy_file(source / "packaging/flash-usb.desktop", stage / "usr/share/applications/flash-usb.desktop")

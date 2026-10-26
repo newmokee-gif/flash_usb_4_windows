@@ -8,6 +8,7 @@ import tkinter as tk
 
 import macos_usb
 from linux_gui import LinuxUSB
+from package_manager_ui import add_buttons
 
 
 # Pass the entire shell command as argv data, not interpolated AppleScript.
@@ -36,6 +37,7 @@ def elevation_command(command):
 
 class MacUSB(LinuxUSB):
     def __init__(self, root):
+        add_buttons(root, busy=lambda: getattr(self, "busy", False))
         super().__init__(root)
         root.title("WinUSB Creator — macOS / UEFI")
         self.append("macOS: для больших WIM установите Homebrew wimlib: brew install wimlib.")
