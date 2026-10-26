@@ -1,0 +1,14 @@
+name: Inspect official sources for catalogue expansion
+on:
+  push:
+    branches: [main]
+    paths: [scripts/probe_catalog_sources.py, .github/workflows/catalog-probe.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - run: python scripts/probe_catalog_sources.py
