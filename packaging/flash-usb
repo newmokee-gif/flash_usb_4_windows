@@ -1,2 +1,2 @@
 #!/bin/sh
-exec /usr/bin/python3 /usr/share/flash-usb/flash_usb.py "$@"
+exec /usr/bin/python3 -B /usr/share/flash-usb/flash_usb.py "$@"
