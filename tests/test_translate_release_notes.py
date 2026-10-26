@@ -28,7 +28,7 @@ class ReleaseTranslationTests(unittest.TestCase):
         with redirect_stdout(io.StringIO()):
             translate(self.gh, self.root)
         self.assertEqual(set(self.gh.edit.call_args.kwargs),
-                         {"name", "body", "tag_name", "target_commitish", "draft", "prerelease"})
+                         {"name", "body", "tag_name", "draft", "prerelease"})
         for key in ("assets", "tag_name", "target_commitish", "draft", "prerelease"):
             self.assertEqual(self.release[key], before[key])
         self.assertIn("30 more distributions", self.release["body"])

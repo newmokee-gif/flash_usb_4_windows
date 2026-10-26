@@ -43,8 +43,7 @@ def translate(gh, root):
         ref = gh.api(f"git/ref/tags/{tag}")
         require(ref.get("ref") == f"refs/tags/{tag}", "Original tag is missing")
         gh.edit(current["id"], name=name, body=body, tag_name=tag,
-                target_commitish=current["target_commitish"], draft=current["draft"],
-                prerelease=current["prerelease"])
+                draft=current["draft"], prerelease=current["prerelease"])
         updated = gh.release(current["id"])
         require(updated["name"] == name and updated["body"] == body,
                 "Release translation was not saved")
@@ -63,4 +62,4 @@ if __name__ == "__main__":
         translate(GitHub(), Path(__file__).resolve().parents[1])
     except subprocess.CalledProcessError as exc:
         # gh captures API errors; surface the response without printing credentials.
-        raise RuntimeError(f"Release metadata API failed: {exc.stderr}") from None
+        raise RuntimeError(f"Release metadata API failed ({exc.cmd[2]}): {exc.stderr}") from None
