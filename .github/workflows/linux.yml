@@ -20,17 +20,17 @@ jobs:
             image: debian:stable-slim
             install: >-
               apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends
-              python3 python3-tk dosfstools parted wimtools util-linux udev xvfb
+              python3 python3-tk dosfstools parted wimtools util-linux udev xvfb fonts-dejavu-core
           - distro: Fedora
             image: fedora:latest
             install: >-
               dnf install -y python3 python3-tkinter dosfstools parted wimlib-utils
-              util-linux systemd-udev xorg-x11-server-Xvfb
+              util-linux systemd-udev xorg-x11-server-Xvfb dejavu-sans-fonts
           - distro: Arch
             image: archlinux:latest
             install: >-
               pacman -Syu --noconfirm python tk dosfstools parted wimlib util-linux
-              systemd xorg-server-xvfb
+              systemd xorg-server-xvfb ttf-dejavu
     name: ${{ matrix.distro }}
     steps:
       - uses: actions/checkout@v4

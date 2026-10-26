@@ -11,13 +11,13 @@ Linux-версия имеет графический интерфейс Tkinter 
 ```sh
 # Debian / Ubuntu
 sudo apt-get update
-sudo apt-get install python3 python3-tk util-linux parted dosfstools wimtools udev pkexec
+sudo apt-get install python3 python3-tk util-linux parted dosfstools wimtools udev pkexec fonts-dejavu-core
 
 # Fedora
-sudo dnf install python3 python3-tkinter util-linux parted dosfstools wimlib-utils systemd-udev polkit
+sudo dnf install python3 python3-tkinter util-linux parted dosfstools wimlib-utils systemd-udev polkit dejavu-sans-fonts
 
 # Arch Linux (полное обновление системы обязательно для rolling release)
-sudo pacman -Syu --needed python tk util-linux parted dosfstools wimlib systemd polkit
+sudo pacman -Syu --needed python tk util-linux parted dosfstools wimlib systemd polkit ttf-dejavu
 ```
 
 В графической сессии запустите `python3 flash_usb.py`. Выберите ISO и USB, введите точный путь накопителя. Только операция записи запускается с правами администратора через polkit; нужен работающий агент авторизации рабочего стола. Если его нет, используйте CLI:
