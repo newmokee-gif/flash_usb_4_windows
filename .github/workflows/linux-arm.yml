@@ -75,16 +75,7 @@ jobs:
         with:
           name: linux-arm64-appimage
           path: appimage
-      - name: Download and verify the existing architecture-independent installers
-        run: |
-          mkdir -p installers
-          cd installers
-          base=https://github.com/newmokee-gif/flash_usb_4_windows/releases/download/v0.2.0-linux.2
-          curl -fL "$base/flash-usb_0.2.0.linux.2_all.deb" -o flash-usb_0.2.0.linux.2_all.deb
-          curl -fL "$base/flash-usb-0.2.0-0.2.linux.noarch.rpm" -o flash-usb-0.2.0-0.2.linux.noarch.rpm
-          curl -fL "$base/SHA256SUMS-packages.txt" -o SHA256SUMS-packages.txt
-          sha256sum -c SHA256SUMS-packages.txt
-      - name: Run AppImage, install existing package, test and uninstall
+      - name: Run AppImage, build and install current package, test and uninstall
         env:
           IMAGE: ${{ matrix.image }}
           FORMAT: ${{ matrix.format }}
@@ -92,7 +83,7 @@ jobs:
           test "$(uname -m)" = aarch64
           chmod 755 appimage/*.AppImage
           set +e
-          docker run --rm -v "$PWD:/src:ro" -v "$PWD/appimage:/app:ro" -v "$PWD/installers:/packages:ro" -w /src -e FORMAT "$IMAGE" sh -eu -c '
+          docker run --rm -v "$PWD:/src:ro" -v "$PWD/appimage:/app:ro" -w /src -e FORMAT "$IMAGE" sh -eu -c '
             test "$(uname -m)" = aarch64
             if [ "$FORMAT" = deb ]; then
               apt-get update
@@ -111,9 +102,15 @@ jobs:
             runuser -u nobody -- "$app" --appimage-extract-and-run --self-test
             "$app" --appimage-extract-and-run --self-test
             if [ "$FORMAT" = deb ]; then
-              DEBIAN_FRONTEND=noninteractive apt-get install -y /packages/*.deb desktop-file-utils
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 dpkg-dev
             else
-              dnf install -y /packages/*.rpm desktop-file-utils
+              dnf install -y python3 rpm-build
+            fi
+            python3 packaging/build.py "$FORMAT" --output /tmp/installer-out
+            if [ "$FORMAT" = deb ]; then
+              DEBIAN_FRONTEND=noninteractive apt-get install -y /tmp/installer-out/*.deb desktop-file-utils
+            else
+              dnf install -y /tmp/installer-out/*.rpm desktop-file-utils
               rpm -V flash-usb
             fi
             desktop-file-validate /usr/share/applications/flash-usb.desktop

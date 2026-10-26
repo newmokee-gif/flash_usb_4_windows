@@ -1,0 +1,93 @@
+name: Unified Windows Linux macOS release
+
+on:
+  push:
+    branches: [linux-support]
+    tags: [v0.2.0]
+    paths:
+      - scripts/consolidate_release.py
+      - tests/test_consolidate_release.py
+      - docs/releases/v0.2.0.md
+      - .github/workflows/unified-release.yml
+      - .github/workflows/linux-arm.yml
+      - README.md
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unified-release-v0.2.0
+  cancel-in-progress: false
+
+jobs:
+  checks:
+    uses: ./.github/workflows/linux.yml
+
+  stage:
+    if: github.ref == 'refs/heads/linux-support'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Verify source releases and prepare unified files without publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set +e
+          python scripts/consolidate_release.py --tag v0.2.0 --output release-staging --notes-file docs/releases/v0.2.0.md 2>&1 | tee consolidation.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python -c 'from pathlib import Path; t=Path("consolidation.log").read_text(errors="replace")[-3500:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unified-release-dry-run
+          path: |
+            release-staging/
+            consolidation.log
+          retention-days: 14
+          if-no-files-found: error
+
+  publish:
+    if: github.ref == 'refs/tags/v0.2.0'
+    needs: checks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Publish verified unified release and hide old releases without deletion
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set +e
+          python scripts/consolidate_release.py --tag v0.2.0 --output release-staging --notes-file docs/releases/v0.2.0.md --publish 2>&1 | tee consolidation.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python -c 'from pathlib import Path; t=Path("consolidation.log").read_text(errors="replace")[-3500:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unified-release-backup-and-verification
+          path: |
+            release-staging/
+            consolidation.log
+          retention-days: 30
+          if-no-files-found: error
