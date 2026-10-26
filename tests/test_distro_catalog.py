@@ -20,6 +20,32 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(len(catalog.CATALOG), len({e.id for e in catalog.CATALOG}))
         self.assertFalse(any(e.distro == "Arch Linux" and e.architecture == "ARM64" for e in catalog.CATALOG))
 
+    def test_thirty_new_distributions_are_not_counted_as_architecture_duplicates(self):
+        additions = {"EndeavourOS", "Artix Linux", "Garuda Linux", "antiX", "Linux Lite", "deepin",
+                     "SparkyLinux", "Bazzite", "Tails", "Rescuezilla", "SystemRescue", "Proxmox VE",
+                     "Slint", "Zorin OS", "PureOS", "Nobara Linux", "Solus", "MX Linux", "Peppermint OS",
+                     "Archcraft", "Calculate Linux", "Ultramarine Linux", "Oracle Linux", "Puppy Linux",
+                     "GParted Live", "Chimera Linux", "openEuler", "Vanilla OS", "Rhino Linux", "Parrot OS"}
+        self.assertEqual(len(additions), 30)
+        self.assertTrue(additions <= {e.distro for e in catalog.CATALOG if e.architecture == "x64"})
+        self.assertGreaterEqual(sum(e.architecture == "ARM64" for e in catalog.CATALOG), 17)
+        for entry in catalog.CATALOG:
+            self.assertIn(entry.checksum_algorithm, ("sha256", "sha512"))
+            self.assertTrue(entry.checksum_url or entry.api_json_url or entry.release_pointer_url
+                            or entry.publisher_page_url or entry.checksum_suffix or entry.checksum_pattern)
+            for url in (entry.image_url, entry.checksum_url, entry.api_json_url, entry.torrent_url):
+                if url: self.assertTrue(url.startswith("https://"), entry.id)
+
+    def test_gparted_sha256_section_cannot_be_confused_with_blake3(self):
+        entry = next(e for e in catalog.CATALOG if e.id == "gparted")
+        sha256 = "### SHA256SUMS:\n" + "a"*64 + "  " + entry.filename + "\n"
+        blake3 = "### B3SUMS:\n" + "b"*64 + "  " + entry.filename + "\n"
+        with patch.object(catalog, "_metadata", return_value=sha256 + blake3):
+            self.assertEqual(catalog.resolve_image(entry).sha256, "a"*64)
+        for manifest in (blake3, sha256 + sha256 + blake3):
+            with self.subTest(manifest=manifest), patch.object(catalog, "_metadata", return_value=manifest):
+                with self.assertRaises(catalog.DownloadError): catalog.resolve_image(entry)
+
     def test_official_manifest_resolves_filename_and_torrent(self):
         entry = next(e for e in catalog.CATALOG if e.id == "ubuntu")
         filename = "ubuntu-24.04.4-desktop-amd64.iso"

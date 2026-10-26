@@ -30,6 +30,49 @@ ISO, а не утверждение о поддержке всех сущест�
 | Mageia | mageia.org → зеркало, выбранное издателем | x64 Live Xfce |
 | Porteus | mirrors.dotsrc.org/porteus | x64 Xfce |
 | Pop!_OS | api.pop-os.org, iso.pop-os.org | x64 Intel/AMD |
+| EndeavourOS | mirror.alpix.eu/endeavouros (зеркало издателя) | x64 Titan Nova |
+| Artix Linux | download.artixlinux.org | x64 Base OpenRC |
+| Garuda Linux | iso.builds.garudalinux.org | x64 Dr460nized |
+| antiX | SourceForge / antix-linux | x64 Full sysVinit |
+| Linux Lite | SourceForge / linux-lite | x64 |
+| deepin | cdimage.deepin.com | x64 Desktop |
+| SparkyLinux | SourceForge / sparkylinux | x64 Xfce |
+| Bazzite | download.bazzite.gg | x64 Stable Desktop |
+| Tails | tails.net → download.tails.net | x64 USB IMG, не DVD ISO |
+| Rescuezilla | GitHub / rescuezilla/rescuezilla | x64 Noble |
+| SystemRescue | system-rescue.org, fastly-cdn.system-rescue.org | x64 |
+| Proxmox VE | enterprise.proxmox.com/iso | x64, ARM64 установщик сервера виртуализации |
+| Slint | slackware.uk/slint (зеркало издателя) | x64 |
+| Zorin OS | plug-mirror.rcac.purdue.edu/zorin-iso (зеркало издателя) | x64 Core |
+| PureOS | storage.puri.sm | x64 Crimson GNOME |
+| Nobara Linux | nobara-images.nobaraproject.org | x64 Official |
+| Solus | downloads.getsol.us | x64 Budgie |
+| MX Linux | SourceForge / mx-linux | x64 Xfce |
+| Peppermint OS | SourceForge / peppermintos | x64 Debian Xfce |
+| Archcraft | SourceForge / archcraft | x64 |
+| Calculate Linux | mirror.calculate-linux.org | x64 Desktop KDE |
+| Ultramarine Linux | ultramarine-linux.org/fyra-images | x64 Plasma |
+| Oracle Linux | yum.oracle.com; суммы linux.oracle.com/security/gpg/checksum | x64 Boot, ARM64 Boot UEK |
+| Puppy Linux | distro.ibiblio.org/puppylinux (зеркало издателя) | x64 BookwormPup64 |
+| GParted Live | SourceForge / gparted; суммы gparted.org | x64 |
+| Chimera Linux | repo.chimera-linux.org | x64, ARM64 Live GNOME (musl / dinit) |
+| openEuler | repo.openeuler.org | x64, ARM64 Installer |
+| Vanilla OS | GitHub / Vanilla-OS/live-iso | x64, ARM64 |
+| Rhino Linux | SourceForge / rhino-linux-builder | x64, ARM64 |
+| Parrot OS | download.parrot.sh | x64, ARM64 Home |
+
+Расширение добавляет ровно 30 новых названий: всего **60 систем, 77 образов,
+17 ARM64-вариантов**. Разные архитектуры не считаются разными дистрибутивами.
+В список входят рабочие станции, серверные установщики и специализированные
+Live-системы восстановления; это не обещание одинакового назначения или
+совместимости всех образов с любым компьютером. Chimera, как и Alpine,
+использует musl и не является GNU-системой.
+
+Tails выбирает USB IMG и SHA-256 из официальных JSON-метаданных. Для Garuda
+постоянный URL latest.iso связан с точным именем из контрольной суммы, которое
+также используется для выбора файла в torrent. GParted публикует несколько
+алгоритмов в одном документе: выбирается только секция SHA256SUMS, без смешения
+с BLAKE3. SHA-512 сохраняется явно; MD5/SHA-1 не используются для проверки образов.
 
 Ubuntu flavours показаны отдельными системами в интерфейсе, но относятся к одной
 Ubuntu-базе. Alpine использует musl и BusyBox и технически не является GNU/Linux;

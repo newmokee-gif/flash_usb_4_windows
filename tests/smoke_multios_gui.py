@@ -40,7 +40,7 @@ def check_setup_panels():
 
 def main():
     check_setup_panels()
-    assert len({image.distro for image in distro_catalog.CATALOG}) >= 20
+    assert len({image.distro for image in distro_catalog.CATALOG}) >= 60
     linux_gui.list_devices = lambda: []
     raw_usb.list_devices = lambda: []
     for choice in ("windows_button", "linux_button"):

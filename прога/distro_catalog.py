@@ -37,6 +37,7 @@ class DistroImage:
     api_format: str = "popos"
     checksum_filename_pattern: str = ""
     checksum_path_prefix: str = ""
+    checksum_section: str = ""
 
 
 def channel(id, name, edition, arch, base, pattern, manifest="SHA256SUMS", *, torrent="", algorithm="sha256", checksum_pattern="", suffix=""):
@@ -45,11 +46,11 @@ def channel(id, name, edition, arch, base, pattern, manifest="SHA256SUMS", *, to
                        checksum_suffix=suffix, torrent_template=torrent)
 
 
-def fixed(id, name, edition, arch, base, filename, checksum=None, *, algorithm="sha256", torrent="", checksum_path_prefix=""):
+def fixed(id, name, edition, arch, base, filename, checksum=None, *, algorithm="sha256", torrent="", checksum_path_prefix="", checksum_section=""):
     return DistroImage(id, name, edition, arch, urljoin(base, filename),
         checksum_url=urljoin(base, checksum or filename + ".sha256"), filename=filename,
         checksum_algorithm=algorithm, torrent_url=urljoin(base, torrent) if torrent else None,
-        checksum_path_prefix=checksum_path_prefix)
+        checksum_path_prefix=checksum_path_prefix, checksum_section=checksum_section)
 
 
 _entries = []
@@ -161,7 +162,8 @@ _entries += [
           "BookwormPup64_10.0.12.iso", "BookwormPup64_10.0.12.iso-checksum.txt"),
     fixed("gparted", "GParted Live", "1.8.1-6", "x64",
           "https://downloads.sourceforge.net/project/gparted/gparted-live-stable/1.8.1-6/",
-          "gparted-live-1.8.1-6-amd64.iso", "https://gparted.org/gparted-live/stable/CHECKSUMS.TXT"),
+          "gparted-live-1.8.1-6-amd64.iso", "https://gparted.org/gparted-live/stable/CHECKSUMS.TXT",
+          checksum_section="### SHA256SUMS:"),
 ]
 for arch, name in (("x64", "x86_64"), ("ARM64", "aarch64")):
     key = "x64" if arch == "x64" else "arm64"
@@ -242,8 +244,19 @@ def _latest(names):
     return sorted(names, key=lambda n: [int(t) if t.isdigit() else t for t in re.split(r"(\d+)", n)])[-1]
 
 
-def _digest(text, filename, algorithm, *, per_image=False):
+def _digest(text, filename, algorithm, *, per_image=False, section=""):
     # A filename-free hash is acceptable only at an explicit per-image URL.
+    if section:
+        lines = text.splitlines()
+        starts = [i for i, line in enumerate(lines) if line.strip() == section]
+        if len(starts) != 1:
+            raise DownloadError("Не найдена однозначная секция контрольных сумм издателя.")
+        selected = []
+        for line in lines[starts[0] + 1:]:
+            if line.startswith("### "):
+                break
+            selected.append(line)
+        text = "\n".join(selected)
     length = {"sha256": 64, "sha512": 128}[algorithm]
     if re.fullmatch(rf"\s*[a-fA-F0-9]{{{length}}}\s*", text):
         if not per_image:
@@ -343,6 +356,7 @@ def _resolve_image(entry):
                 if re.fullmatch(expected, candidate):
                     filename = candidate
         digest = _digest(manifest, entry.checksum_path_prefix + filename, entry.checksum_algorithm,
+                         section=entry.checksum_section,
                          per_image=entry.checksum_url in tuple(entry.image_url + suffix for suffix in
                              (".sha256", ".SHA256SUM", ".sha256sum", ".sha512", ".sha512sum"))
                          or entry.checksum_url == entry.image_url.removesuffix(".iso") + ".sha256.txt")

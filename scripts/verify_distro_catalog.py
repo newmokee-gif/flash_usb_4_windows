@@ -61,7 +61,7 @@ def validate(entry):
         else:
             result["torrent"] = "No matching publisher torrent found; official HTTPS"
         message = (entry.id + ": " + result["image_url"] + " | " + result["torrent"]).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
-        print("::notice::" + message, flush=True)
+        print(message, flush=True)
     except Exception as error:
         result.update(status="error", error=str(error), metadata=metadata_diagnostics(), directory=failure_directory(entry))
         diagnostic = entry.id + ": " + str(error) + "\n" + json.dumps({"metadata": result["metadata"], "directory": result["directory"]}, ensure_ascii=False)
