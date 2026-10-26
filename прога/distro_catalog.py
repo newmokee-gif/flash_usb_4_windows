@@ -405,6 +405,7 @@ def discover_torrent(image):
     if image.torrent_url:
         return image
     indexes = {
+        "artix": "https://torrents.artixlinux.org/torrents.php",
         "gentoo": "https://torrents.gentoo.org/",
         "mageia": "https://torrent.mageia.org/",
         "bodhi": "https://sourceforge.net/projects/bodhilinux/files/7.0.0/",

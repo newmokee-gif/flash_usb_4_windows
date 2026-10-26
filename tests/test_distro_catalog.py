@@ -210,6 +210,13 @@ class CatalogTests(unittest.TestCase):
 
 
 class TorrentDiscoveryTests(unittest.TestCase):
+    def test_artix_checks_the_publishers_advertised_torrent_directory(self):
+        image = catalog.fixed("artix", "Artix Linux", "Base", "x64",
+                              "https://download.artixlinux.org/iso/", "artix-base-openrc-20260813-x86_64.iso")
+        with patch.object(catalog, "fetch", return_value=b"") as fetch:
+            catalog.discover_torrent(image)
+        self.assertEqual(fetch.call_args.args[0], "https://torrents.artixlinux.org/torrents.php")
+
     def test_sourceforge_torrent_discovery_uses_the_project_file_index(self):
         image = catalog.fixed("example", "Example", "Live", "x64",
                               "https://downloads.sourceforge.net/project/example/1.0/", "example.iso")
