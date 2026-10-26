@@ -2,7 +2,7 @@
 """Build a genuine x86_64 AppImage with bundled Python and Tcl/Tk.
 
 Run inside Debian 12 (glibc 2.36), using a venv with PyInstaller==6.22.3.
-Required packages: python3-venv, python3-tk, binutils, ca-certificates.
+Required packages: python3-venv, python3-tk, libpython3.11, binutils, ca-certificates.
 Disk utilities and polkit deliberately remain host system dependencies.
 """
 from __future__ import annotations
