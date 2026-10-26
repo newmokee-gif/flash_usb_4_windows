@@ -24,7 +24,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - runner: macos-15
+          # Use the current free ARM runner; bundled binaries are audited for macOS 15.
+          - runner: macos-26
             python_arch: arm64
             machine: arm64
             name: AppleSilicon
@@ -34,6 +35,8 @@ jobs:
             name: Intel
     runs-on: ${{ matrix.runner }}
     name: Native macOS ${{ matrix.name }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '15.0'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v6
@@ -43,8 +46,16 @@ jobs:
       - name: Install native build and WIM dependencies
         run: |
           test "$(uname -m)" = '${{ matrix.machine }}'
-          brew install wimlib aria2
+          brew install wimlib
           python -m pip install PyInstaller==6.22.3 certifi==2025.10.5
+          set +e
+          python packaging/macos/build_aria2.py --arch '${{ matrix.machine }}' --prefix "$RUNNER_TEMP/aria2-macos15" 2>&1 | tee aria2-build.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python -c 'from pathlib import Path; t=Path("aria2-build.log").read_text(errors="replace")[-3500:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"
       - name: Tests, read-only discovery, real WIM fixture and bundle validation
         env:
           MACOS_ARCH: ${{ matrix.machine }}
@@ -66,7 +77,7 @@ jobs:
             wimlib-imagex split "$fixture/fixture.wim" "$fixture/install.swm" 1 --check
             wimlib-imagex verify "$fixture/install.swm" "--ref=$fixture/install*.swm"
             python tests/smoke_macos_images.py --wim "$fixture/fixture.wim"
-            python packaging/macos/build.py --arch "$MACOS_ARCH" --output macos-dist
+            python packaging/macos/build.py --arch "$MACOS_ARCH" --aria2 "$RUNNER_TEMP/aria2-macos15/bin/aria2c" --output macos-dist
             sudo "$(command -v python)" tests/smoke_raw_macos.py
           ) 2>&1 | tee macos-check.log
           result=${PIPESTATUS[0]}
