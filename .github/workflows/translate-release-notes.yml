@@ -19,7 +19,16 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-      - run: python -m unittest discover -s tests -q
+      - name: Test metadata translation
+        run: |
+          set +e
+          python -m unittest discover -s tests -p test_translate_release_notes.py -v 2>&1 | tee tests.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python -c 'from pathlib import Path; t=Path("tests.log").read_text(errors="replace")[-3500:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"
       - name: Update titles and descriptions without changing binaries or visibility
         env:
           GH_TOKEN: ${{ github.token }}
