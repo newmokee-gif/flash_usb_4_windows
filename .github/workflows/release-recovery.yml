@@ -6,6 +6,10 @@ on:
       - .github/workflows/release-recovery.yml
       - scripts/recover_multios.py
       - tests/test_recover_multios.py
+      - scripts/recovery_schedule.py
+      - tests/test_recovery_schedule.py
+  schedule:
+    - cron: '23 * * * *'
   workflow_dispatch:
 permissions:
   contents: read
@@ -13,7 +17,32 @@ concurrency:
   group: publish-verified-v0.3.0-recovery
   cancel-in-progress: false
 jobs:
+  control:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    outputs:
+      proceed: ${{ steps.control.outputs.proceed }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bound retries and stop once all eight verified applications are public
+        id: control
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set +e
+          python scripts/recovery_schedule.py 2>&1 | tee recovery-control.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python -c 'from pathlib import Path; t=Path("recovery-control.log").read_text(errors="replace")[-3500:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"
   preflight:
+    needs: control
+    if: needs.control.outputs.proceed == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: read
