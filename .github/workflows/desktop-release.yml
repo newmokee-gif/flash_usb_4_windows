@@ -14,6 +14,7 @@ on:
       - '!.github/workflows/catalog-check.yml'
       - '!tests/smoke_raw_macos.py'
       - '!.github/workflows/macos-raw-check.yml'
+      - '!.github/workflows/validation-queue.yml'
 permissions:
   contents: read
 jobs:
