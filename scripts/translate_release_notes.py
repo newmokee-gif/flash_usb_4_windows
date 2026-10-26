@@ -38,7 +38,9 @@ def translate(gh, root):
         updated = gh.release(current["id"])
         require(updated["name"] == name and updated["body"] == body,
                 "Release translation was not saved")
-        require(identity(updated) == identity(current), "Non-text release fields changed")
+        before, after = identity(current), identity(updated)
+        changed = {key: (before[key], after[key]) for key in before if before[key] != after[key]}
+        require(not changed, f"Non-text release fields changed for {current['tag_name']}: {changed}")
         print(f"::notice::English release notes verified: {current['tag_name']}")
     for release in releases:
         if release["tag_name"] not in TAGS:

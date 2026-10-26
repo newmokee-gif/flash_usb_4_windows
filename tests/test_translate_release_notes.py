@@ -1,4 +1,6 @@
 import copy
+from contextlib import redirect_stdout
+import io
 from pathlib import Path
 import sys
 import unittest
@@ -22,7 +24,8 @@ class ReleaseTranslationTests(unittest.TestCase):
 
     def test_only_text_is_modified_and_assets_preserved(self):
         before = copy.deepcopy(self.release)
-        translate(self.gh, self.root)
+        with redirect_stdout(io.StringIO()):
+            translate(self.gh, self.root)
         self.assertEqual(set(self.gh.edit.call_args.kwargs), {"name", "body"})
         for key in ("assets", "tag_name", "target_commitish", "draft", "prerelease"):
             self.assertEqual(self.release[key], before[key])
