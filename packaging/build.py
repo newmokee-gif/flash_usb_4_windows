@@ -59,7 +59,9 @@ def build_deb(source: Path, work: Path, output: Path, epoch: int, env):
     (control_dir / "control").chmod(0o644)
     os.utime(control_dir / "control", (epoch, epoch))
     os.utime(control_dir, (epoch, epoch))
-    artifact = output / f"flash-usb_{DEB_VERSION}_all.deb"
+    # GitHub normalizes '~' in asset names to '.', so use the published-safe
+    # filename from the start; the Debian package version still contains '~'.
+    artifact = output / f"flash-usb_{DEB_VERSION.replace('~', '.')}_all.deb"
     subprocess.run(["dpkg-deb", "--root-owner-group", "--build", str(stage), str(artifact)], check=True, env=env)
     return artifact
 

@@ -12,7 +12,7 @@ Linux-версия имеет графический интерфейс Tkinter 
 
 ```sh
 # Debian
-sudo apt install ./flash-usb_0.2.0~linux.2_all.deb
+sudo apt install ./flash-usb_0.2.0.linux.2_all.deb
 # Fedora
 sudo dnf install ./flash-usb-0.2.0-0.2.linux.noarch.rpm
 ```

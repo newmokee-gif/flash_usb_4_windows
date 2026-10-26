@@ -3,7 +3,7 @@ name: Native Linux packages
 on:
   push:
     branches: [linux-support]
-    tags: ['packages-v*-linux*']
+    tags: ['packages-v*-linux*', 'packages-metadata-v*-linux*']
     paths:
       - packaging/**
       - tests/smoke_installed_package.py
@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   build:
+    if: ${{ !startsWith(github.ref, 'refs/tags/packages-metadata-') }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -80,7 +81,7 @@ jobs:
           if-no-files-found: error
 
   publish:
-    if: startsWith(github.ref, 'refs/tags/packages-')
+    if: startsWith(github.ref, 'refs/tags/packages-v')
     needs: build
     runs-on: ubuntu-latest
     permissions:
@@ -110,7 +111,7 @@ jobs:
 
           ## Ready-to-install Linux packages
 
-          Debian: `sudo apt install ./flash-usb_0.2.0~linux.2_all.deb`
+          Debian: `sudo apt install ./flash-usb_0.2.0.linux.2_all.deb`
 
           Fedora: `sudo dnf install ./flash-usb-0.2.0-0.2.linux.noarch.rpm`
 
@@ -123,4 +124,39 @@ jobs:
           '''
           notes.write_text(notes.read_text() + addition)
           PY
+          gh release edit "$release" --notes-file release-notes.md
+
+  normalize-published-metadata:
+    if: startsWith(github.ref, 'refs/tags/packages-metadata-')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Verify existing installers and align checksum filenames
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          release="${GITHUB_REF_NAME#packages-metadata-}"
+          gh release download "$release" --pattern '*.deb' --pattern '*.rpm' --pattern SHA256SUMS-packages.txt
+          python3 - <<'PY'
+          import hashlib
+          from pathlib import Path
+          manifest = Path('SHA256SUMS-packages.txt')
+          corrected = []
+          for line in manifest.read_text().splitlines():
+              digest, filename = line.split(None, 1)
+              filename = filename.replace('~', '.')
+              assert Path(filename).name == filename
+              actual = hashlib.sha256(Path(filename).read_bytes()).hexdigest()
+              if actual != digest:
+                  raise SystemExit(f'Checksum mismatch: {filename}')
+              corrected.append(f'{digest}  {filename}\n')
+          manifest.write_text(''.join(corrected))
+          PY
+          sha256sum -c SHA256SUMS-packages.txt
+          gh release upload "$release" SHA256SUMS-packages.txt --clobber
+          gh release view "$release" --json body --jq .body > release-notes.md
+          python3 -c 'from pathlib import Path; p=Path("release-notes.md"); p.write_text(p.read_text().replace("flash-usb_0.2.0~linux.2_all.deb", "flash-usb_0.2.0.linux.2_all.deb"))'
           gh release edit "$release" --notes-file release-notes.md
