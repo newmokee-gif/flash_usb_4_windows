@@ -1,0 +1,90 @@
+name: Desktop installer buttons release
+on:
+  push:
+    tags: [v0.2.1]
+permissions:
+  contents: read
+jobs:
+  linux:
+    uses: ./.github/workflows/linux.yml
+  macos:
+    permissions:
+      contents: write
+    uses: ./.github/workflows/macos.yml
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-11-arm
+            arch: ARM64
+            python: arm64
+          - runner: windows-2025
+            arch: x64
+            python: x64
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.python }}
+      - run: python -m pip install PyInstaller==6.22.3
+      - run: python -m unittest discover -s tests -p test_package_manager_ui.py -v
+      - run: python -m unittest discover -s tests -p test_windows_arm.py -v
+      - name: Download and verify official WinGet packages without installing
+        shell: pwsh
+        run: |
+          python -c 'import sys; from pathlib import Path; sys.path.insert(0,"прога"); from winget_install import SCRIPT; Path("verify-winget.ps1").write_text("$verifyOnly = $true\n$aria = $null\n" + SCRIPT, encoding="utf-8-sig")'
+          powershell.exe -NoProfile -File verify-winget.ps1 2>&1 | Tee-Object -FilePath winget-verification.log
+          $result = $LASTEXITCODE
+          if ($result -ne 0) {
+            python -c 'from pathlib import Path; t=Path("winget-verification.log").read_text(errors="replace")[-3000:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          }
+          exit $result
+      - name: Build and check native GUI
+        shell: pwsh
+        run: |
+          python packaging/windows/build_arm64.py --arch '${{ matrix.arch }}' --output desktop-dist 2>&1 | Tee-Object -FilePath desktop-build.log
+          $result = $LASTEXITCODE
+          if ($result -ne 0) {
+            python -c 'from pathlib import Path; t=Path("desktop-build.log").read_text(errors="replace")[-3000:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          }
+          exit $result
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-${{ matrix.arch }}
+          path: desktop-dist/*
+          if-no-files-found: error
+  publish:
+    needs: [linux, macos, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-windows-*
+          path: desktop-dist
+          merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: macos-*
+          path: desktop-dist
+          merge-multiple: true
+      - name: Verify and publish all platforms
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set +e
+          python scripts/publish_desktop_update.py 2>&1 | tee publication.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python -c 'from pathlib import Path; t=Path("publication.log").read_text(errors="replace")[-3500:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"

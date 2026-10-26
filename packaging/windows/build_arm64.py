@@ -16,24 +16,29 @@ import tempfile
 NAME = "WinUSB-Creator-Windows-ARM64"
 
 
-def require_arm64_pe(path):
+def require_arm64_pe(path, machine=0xAA64):
     with Path(path).open("rb") as stream:
         if stream.read(2) != b"MZ":
             raise RuntimeError(f"Not PE: {path}")
         stream.seek(0x3C)
         offset = int.from_bytes(stream.read(4), "little")
         stream.seek(offset)
-        if stream.read(6) != b"PE\0\0\x64\xaa":
-            raise RuntimeError(f"Not native ARM64 PE: {path}")
+        if stream.read(6) != b"PE\0\0" + machine.to_bytes(2, "little"):
+            raise RuntimeError(f"Unexpected PE architecture: {path}")
 
 
 def main():
+    global NAME
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--arch", choices=("ARM64", "x64"), default="ARM64")
     args = parser.parse_args()
-    if sys.platform != "win32" or platform.machine().lower() not in ("arm64", "aarch64") or struct.calcsize("P") != 8:
+    allowed = ("arm64", "aarch64") if args.arch == "ARM64" else ("amd64", "x86_64")
+    machine = 0xAA64 if args.arch == "ARM64" else 0x8664
+    NAME = "WinUSB-Creator-Windows-" + args.arch
+    if sys.platform != "win32" or platform.machine().lower() not in allowed or struct.calcsize("P") != 8:
         raise RuntimeError("Build using native 64-bit ARM64 Python on Windows ARM64")
-    require_arm64_pe(sys.executable)
+    require_arm64_pe(sys.executable, machine)
     if importlib.metadata.version("pyinstaller") != "6.22.3":
         raise RuntimeError("Install PyInstaller==6.22.3")
     source = Path(__file__).resolve().parents[2]
@@ -50,11 +55,11 @@ def main():
         ], check=True)
         package = work / "dist" / NAME
         exe = package / (NAME + ".exe")
-        require_arm64_pe(exe)
+        require_arm64_pe(exe, machine)
         # All collected binary extensions/libraries must also be ARM64.
         for path in package.rglob("*"):
             if path.suffix.lower() in (".dll", ".pyd", ".exe"):
-                require_arm64_pe(path)
+                require_arm64_pe(path, machine)
         report = work / "smoke.json"
         result = subprocess.run([str(exe), "--self-test-report", str(report)], timeout=120)
         if not report.exists():
@@ -65,7 +70,8 @@ def main():
             raise RuntimeError("Frozen GUI check failed")
         shutil.copyfile(source / "LICENSE", package / "LICENSE")
         shutil.copyfile(source / "README.md", package / "README.md")
-        shutil.copyfile(source / "packaging/windows/README-ARM64.txt", package / "README-ARM64.txt")
+        if args.arch == "ARM64":
+            shutil.copyfile(source / "packaging/windows/README-ARM64.txt", package / "README-ARM64.txt")
         # Redistributed Python/PyInstaller runtime license notices.
         for license_path in (Path(sys.base_prefix) / "LICENSE.txt",):
             if license_path.exists():
@@ -78,7 +84,7 @@ def main():
                     shutil.copyfile(candidate, package / ("PyInstaller-" + candidate.name))
         artifact = Path(shutil.make_archive(str(output / NAME), "zip", work / "dist", NAME))
         digest = hashlib.sha256(artifact.read_bytes()).hexdigest()
-        (output / "SHA256SUMS-Windows-ARM64.txt").write_text(f"{digest}  {artifact.name}\n", encoding="utf-8")
+        (output / f"SHA256SUMS-Windows-{args.arch}.txt").write_text(f"{digest}  {artifact.name}\n", encoding="utf-8")
         print(f"Built and verified {artifact}")
 
 

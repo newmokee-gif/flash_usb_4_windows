@@ -2,7 +2,6 @@ name: Unified Windows Linux macOS release
 
 on:
   push:
-    branches: [linux-support]
     tags: [v0.2.0]
     paths:
       - scripts/consolidate_release.py

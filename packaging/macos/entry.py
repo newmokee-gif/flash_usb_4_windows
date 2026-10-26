@@ -25,6 +25,15 @@ def self_test(report):
         try:
             MacUSB(root)
             root.update()
+            def labels(widget):
+                found = []
+                for child in widget.winfo_children():
+                    if "text" in child.keys():
+                        found.append(str(child.cget("text")))
+                    found.extend(labels(child))
+                return found
+            if "Установить Homebrew" not in labels(root):
+                raise RuntimeError("Homebrew installation button missing")
             result.update(gui="passed", tk=tk.TkVersion)
         finally:
             root.destroy()

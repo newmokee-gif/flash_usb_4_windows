@@ -18,12 +18,12 @@ class InstallerTests(unittest.TestCase):
         self.assertTrue(run.call_args.kwargs["check"])
 
     def test_windows_opens_official_app_installer(self):
-        with patch.object(ui.os, "startfile", create=True) as start:
+        with patch("winget_install.launch") as start:
             ui.launch("win32")
-        start.assert_called_once_with("ms-windows-store://pdp/?ProductId=9NBLGGH4NNS1")
+        start.assert_called_once_with(None)
 
     def test_launch_errors_are_not_reported_as_success(self):
-        with patch.object(ui.os, "startfile", create=True, side_effect=OSError("Store unavailable")):
+        with patch("winget_install.launch", side_effect=OSError("PowerShell unavailable")):
             with self.assertRaises(OSError):
                 ui.launch("win32")
 

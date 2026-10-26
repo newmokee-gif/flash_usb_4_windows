@@ -265,7 +265,8 @@ class WindowsOneClickUSB:
         self.root.destroy()
 
     def build_ui(self):
-        add_buttons(self.root, busy=lambda: self.is_busy)
+        add_buttons(self.root, busy=lambda: self.is_busy,
+                    local_aria=os.path.join(self.tools_dir, "aria2c.exe"))
         pad = {"padx": 15, "pady": 4}
 
         folder_frame = tk.Frame(self.root, bg="#e9f5ff")

@@ -13,7 +13,8 @@ import V2
 def self_test(report):
     result = {"machine": platform.machine(), "frozen": bool(getattr(sys, "frozen", False))}
     try:
-        if not V2.is_arm64_host() or not V2.is_arm64_executable(sys.executable):
+        arm = V2.is_arm64_host()
+        if arm and not V2.is_arm64_executable(sys.executable):
             raise RuntimeError("The diagnostic requires a native ARM64 Windows executable")
         # No network, disk enumeration, partitioning or administrator prompt.
         with tempfile.TemporaryDirectory(prefix="winusb-arm-smoke-") as directory:
@@ -24,9 +25,18 @@ def self_test(report):
             try:
                 app = V2.WindowsOneClickUSB(root)
                 root.update()
-                if V2.windows_iso_architecture(app.win_version.get()) != "ARM64":
+                if arm and V2.windows_iso_architecture(app.win_version.get()) != "ARM64":
                     raise RuntimeError("ARM64 must be the default image architecture on ARM64")
-                result.update(gui="passed", ctypes="passed", default_iso="ARM64", tk=V2.tk.TkVersion)
+                def labels(widget):
+                    found = []
+                    for child in widget.winfo_children():
+                        if "text" in child.keys():
+                            found.append(str(child.cget("text")))
+                        found.extend(labels(child))
+                    return found
+                if "Установить WinGet" not in labels(root):
+                    raise RuntimeError("WinGet installation button missing")
+                result.update(gui="passed", ctypes="passed", installer_button="passed", tk=V2.tk.TkVersion)
                 V2.kernel32.GetLastError()
             finally:
                 root.destroy()

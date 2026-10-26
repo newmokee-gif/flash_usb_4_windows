@@ -14,7 +14,6 @@ HOMEBREW_SCRIPT = '''on run argv
         do script (item 1 of argv)
     end tell
 end run'''
-WINGET_STORE = "ms-windows-store://pdp/?ProductId=9NBLGGH4NNS1"
 
 
 def installed(system):
@@ -26,20 +25,20 @@ def installed(system):
     return False
 
 
-def launch(system):
+def launch(system, local_aria=None):
     if system == "darwin":
         # An interactive terminal allows Homebrew to request sudo and explain
         # Xcode tools/PATH setup. No password is handled by this application.
         subprocess.run(["/usr/bin/osascript", "-e", HOMEBREW_SCRIPT, HOMEBREW_COMMAND],
                        check=True, capture_output=True, text=True, timeout=15)
     elif system == "win32":
-        # Microsoft's App Installer includes WinGet for x64 and ARM64.
-        os.startfile(WINGET_STORE)
+        from winget_install import launch as install_winget
+        install_winget(local_aria)
     else:
         raise RuntimeError("Эта кнопка доступна только в Windows и macOS.")
 
 
-def add_buttons(parent, busy=lambda: False):
+def add_buttons(parent, busy=lambda: False, local_aria=None):
     system = sys.platform
     if system not in ("darwin", "win32"):
         return
@@ -62,13 +61,14 @@ def add_buttons(parent, busy=lambda: False):
             "Откроется Терминал с официальным установщиком Homebrew. "
             "Следуйте его инструкциям; может потребоваться пароль администратора. Продолжить?"
             if system == "darwin" else
-            "Откроется Microsoft Store: установите или обновите «Установщик приложений» "
-            "(App Installer), включающий WinGet. Продолжить?"
+            "Откроется установка файлов WinGet с GitHub Microsoft. Загрузка использует "
+            "aria2, если он установлен, иначе HTTPS-загрузчик Windows. "
+            "Будут проверены SHA-256 и подписи Microsoft. Продолжить?"
         )
         if not messagebox.askyesno(name, explanation, parent=parent):
             return
         try:
-            launch(system)
+            launch(system, local_aria)
         except (OSError, RuntimeError, subprocess.SubprocessError) as exc:
             messagebox.showerror(name, f"Не удалось открыть установку: {exc}", parent=parent)
             return
