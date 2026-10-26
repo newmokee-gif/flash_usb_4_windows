@@ -43,7 +43,7 @@ class MacGUICommandTests(unittest.TestCase):
     def test_frozen_command_restarts_bundle_and_keeps_identity(self):
         with patch.object(sys, 'frozen', True, create=True), patch.object(sys, 'executable', '/Applications/WinUSB.app/Contents/MacOS/WinUSB'):
             command = macos_gui.build_write_command('/tmp/Windows ARM.iso', self.device, self.device.path)
-        self.assertEqual(command[:3], ['/Applications/WinUSB.app/Contents/MacOS/WinUSB', 'write', '/tmp/Windows ARM.iso'])
+        self.assertEqual(command[:3], ['/Applications/WinUSB.app/Contents/MacOS/WinUSB', 'write', str(Path('/tmp/Windows ARM.iso').resolve())])
         self.assertEqual(json.loads(command[-1]), list(self.device.identity))
 
     def test_source_command_runs_macos_backend(self):
