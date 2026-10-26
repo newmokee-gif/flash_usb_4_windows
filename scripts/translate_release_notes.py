@@ -1,6 +1,7 @@
 """Update documented release titles/bodies only; never touch assets or visibility."""
 from pathlib import Path
 import re
+import subprocess
 from consolidate_release import GitHub, require
 
 
@@ -45,4 +46,8 @@ def translate(gh, root):
 
 
 if __name__ == "__main__":
-    translate(GitHub(), Path(__file__).resolve().parents[1])
+    try:
+        translate(GitHub(), Path(__file__).resolve().parents[1])
+    except subprocess.CalledProcessError as exc:
+        # gh captures API errors; surface the response without printing credentials.
+        raise RuntimeError(f"Release metadata API failed: {exc.stderr}") from None

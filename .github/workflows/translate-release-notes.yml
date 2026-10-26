@@ -24,4 +24,12 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: python scripts/translate_release_notes.py
+        run: |
+          set +e
+          python scripts/translate_release_notes.py 2>&1 | tee translation.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python -c 'from pathlib import Path; t=Path("translation.log").read_text(errors="replace")[-3500:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"
