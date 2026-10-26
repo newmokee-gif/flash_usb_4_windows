@@ -1,4 +1,5 @@
 import sys
+import json
 from pathlib import Path
 import unittest
 from unittest.mock import patch
@@ -14,7 +15,7 @@ class CatalogTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
 
     def test_catalog_has_distinct_distributions_and_real_architectures(self):
-        self.assertGreaterEqual(len({e.distro for e in catalog.CATALOG}), 20)
+        self.assertGreaterEqual(len({e.distro for e in catalog.CATALOG}), 60)
         self.assertGreaterEqual(len({e.distro for e in catalog.CATALOG if e.architecture == "ARM64"}), 5)
         self.assertEqual(len(catalog.CATALOG), len({e.id for e in catalog.CATALOG}))
         self.assertFalse(any(e.distro == "Arch Linux" and e.architecture == "ARM64" for e in catalog.CATALOG))
@@ -103,8 +104,93 @@ class CatalogTests(unittest.TestCase):
         self.assertEqual(resolved.image_url, url)
         self.assertEqual(resolved.checksum_url, url + ".sha512")
 
+    def test_sha512_is_retained_for_fixed_images(self):
+        for id in ("endeavouros", "peppermint"):
+            entry = next(e for e in catalog.CATALOG if e.id == id)
+            with self.subTest(id=id), patch.object(catalog, "_metadata", return_value="a"*128 + "  " + entry.filename):
+                image = catalog.resolve_image(entry)
+                self.assertEqual(image.sha512, "a"*128)
+                self.assertIsNone(image.sha256)
+
+    def test_sha512_is_retained_for_directory_channels(self):
+        entry = catalog.channel("test", "Test", "Live", "x64", "https://example.org/",
+                                r"test-x64\.iso", "SHA512SUMS", algorithm="sha512")
+        with patch.object(catalog, "_metadata", return_value="a"*128 + "  test-x64.iso"):
+            self.assertEqual(catalog.resolve_image(entry).sha512, "a"*128)
+
+    def test_garuda_alias_keeps_official_url_and_canonical_torrent_filename(self):
+        entry = next(e for e in catalog.CATALOG if e.id == "garuda")
+        filename = "garuda-dr460nized-linux-garuda-260819.iso"
+        with patch.object(catalog, "_metadata", return_value="a"*64 + "  " + filename):
+            image = catalog.resolve_image(entry)
+        self.assertEqual(image.image_url, entry.image_url)
+        self.assertEqual(image.filename, filename)
+        self.assertEqual(image.torrent_url, entry.torrent_url)
+
+    def test_alias_cannot_select_different_architecture_or_multiple_images(self):
+        entry = next(e for e in catalog.CATALOG if e.id == "garuda")
+        for manifest in ("a"*64 + "  wrong-arm64.iso",
+                         "a"*64 + "  garuda-dr460nized-linux-garuda-260819.iso\n" + "b"*64 + "  other.iso"):
+            with self.subTest(manifest=manifest), patch.object(catalog, "_metadata", return_value=manifest):
+                with self.assertRaises(catalog.DownloadError):
+                    catalog.resolve_image(entry)
+
+    def test_publisher_manifest_prefix_is_not_used_as_a_download_path(self):
+        entry = next(e for e in catalog.CATALOG if e.id == "ultramarine")
+        manifest = "a"*64 + "  " + entry.checksum_path_prefix + entry.filename
+        with patch.object(catalog, "_metadata", return_value=manifest):
+            image = catalog.resolve_image(entry)
+        self.assertEqual(image.filename, entry.filename)
+        self.assertEqual(image.image_url, entry.image_url)
+        self.assertEqual(image.sha256, "a"*64)
+        with patch.object(catalog, "_metadata", return_value=manifest.replace(entry.checksum_path_prefix, "another/")):
+            with self.assertRaises(catalog.DownloadError):
+                catalog.resolve_image(entry)
+
+    def test_bare_checksum_is_rejected_for_a_shared_manifest(self):
+        with self.assertRaises(catalog.DownloadError):
+            catalog._digest("a"*64, "anything.iso", "sha256")
+
+    def test_tails_uses_the_official_usb_img_not_the_dvd_iso(self):
+        entry = next(e for e in catalog.CATALOG if e.id == "tails")
+        target = {"url": "https://download.tails.net/tails/stable/tails-amd64-7.15.1/tails-amd64-7.15.1.img", "sha256": "a"*64}
+        data = {"product-name": "Tails", "build_target": "amd64", "channel": "stable", "installations": [
+            {"installation-paths": [{"type": "img", "target-files": [target]},
+                                    {"type": "iso", "target-files": [{"url": "unused.iso"}]}]}]}
+        with patch.object(catalog, "_metadata", return_value=json.dumps(data)):
+            image = catalog.resolve_image(entry)
+        self.assertEqual(image.image_url, target["url"])
+        self.assertEqual(image.sha256, target["sha256"])
+        self.assertEqual(image.checksum_url, entry.api_json_url)
+        self.assertTrue(image.filename.endswith(".img"))
+
+    def test_tails_rejects_wrong_host_hash_architecture_and_ambiguous_images(self):
+        entry = next(e for e in catalog.CATALOG if e.id == "tails")
+        target = {"url": "https://download.tails.net/tails/stable/tails-amd64-7.15.1/tails-amd64-7.15.1.img", "sha256": "a"*64}
+        data = {"product-name": "Tails", "build_target": "amd64", "channel": "stable", "installations": [
+            {"installation-paths": [{"type": "img", "target-files": [target]}]}]}
+        for field, val in (("url", target["url"].replace("download.tails.net", "example.org")),
+                           ("url", target["url"].replace("https:", "http:")),
+                           ("url", target["url"].replace("7.15.1.img", "7.15.2.img")),
+                           ("sha256", "a"*32)):
+            invalid = json.loads(json.dumps(data))
+            invalid["installations"][0]["installation-paths"][0]["target-files"][0][field] = val
+            with self.subTest(field=field, val=val), patch.object(catalog, "_metadata", return_value=json.dumps(invalid)):
+                with self.assertRaises(catalog.DownloadError): catalog.resolve_image(entry)
+        for field, val in (("build_target", "arm64"), ("channel", "testing"), ("product-name", "Other"),
+                           ("installations", data["installations"] * 2)):
+            with self.subTest(field=field), patch.object(catalog, "_metadata", return_value=json.dumps({**data, field: val})):
+                with self.assertRaises(catalog.DownloadError): catalog.resolve_image(entry)
+
 
 class TorrentDiscoveryTests(unittest.TestCase):
+    def test_sourceforge_torrent_discovery_uses_the_project_file_index(self):
+        image = catalog.fixed("example", "Example", "Live", "x64",
+                              "https://downloads.sourceforge.net/project/example/1.0/", "example.iso")
+        with patch.object(catalog, "fetch", return_value=b"") as fetch:
+            catalog.discover_torrent(image)
+        self.assertEqual(fetch.call_args.args[0], "https://sourceforge.net/projects/example/files/1.0/")
+
     def test_discovers_publisher_release_torrent_containing_selected_image(self):
         image = catalog.DistroImage("rocky-x64", "Rocky Linux", "Minimal", "x64", "https://example.org/iso/Rocky-9.7-x86_64-minimal.iso", filename="Rocky-9.7-x86_64-minimal.iso", sha256="a"*64)
         page = b'<a href="Rocky-9.7-x86_64.torrent">torrent</a>'

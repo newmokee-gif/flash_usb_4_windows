@@ -35,9 +35,10 @@ PREVIOUS_URLS = {
     "archcraft": "https://sourceforge.net/projects/archcraft/files/v26.08/",
 }
 URLS = {
-    "puppy": "https://distro.ibiblio.org/puppylinux/puppy-bookwormpup/BookwormPup64/10.0.12/BookwormPup64_10.0.12.iso-checksum.txt",
-    "clonezilla": "https://sourceforge.net/projects/clonezilla/files/clonezilla_live_stable/3.3.3-37/",
-    "mx-torrents": "https://mxlinux.org/torrent-files/",
+    "gparted": "https://gparted.org/gparted-live/stable/CHECKSUMS.TXT",
+    "blendos": "https://git.blendos.co/api/v4/projects/32/jobs/artifacts/main/raw/checksum?job=build-job",
+    "crystal": "https://api.github.com/repos/crystal-linux/iso/releases/latest",
+    "mocaccino": "https://api.github.com/repos/mocaccinoOS/mocaccino/releases/latest",
 }
 
 class Links(HTMLParser):

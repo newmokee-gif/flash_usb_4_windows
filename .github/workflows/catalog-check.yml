@@ -1,7 +1,7 @@
 name: Official distribution catalogue
 on:
   push:
-    branches: [linux-support]
+    branches: [main, linux-support]
     paths:
       - прога/distro_catalog.py
       - scripts/verify_distro_catalog.py

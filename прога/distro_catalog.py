@@ -34,12 +34,22 @@ class DistroImage:
     release_pointer_url: str = ""
     publisher_page_url: str = ""
     sha512: str | None = None
+    api_format: str = "popos"
+    checksum_filename_pattern: str = ""
+    checksum_path_prefix: str = ""
 
 
 def channel(id, name, edition, arch, base, pattern, manifest="SHA256SUMS", *, torrent="", algorithm="sha256", checksum_pattern="", suffix=""):
     return DistroImage(id, name, edition, arch, base, checksum_url=urljoin(base, manifest) if manifest else "",
                        checksum_algorithm=algorithm, pattern=pattern, checksum_pattern=checksum_pattern,
                        checksum_suffix=suffix, torrent_template=torrent)
+
+
+def fixed(id, name, edition, arch, base, filename, checksum=None, *, algorithm="sha256", torrent="", checksum_path_prefix=""):
+    return DistroImage(id, name, edition, arch, urljoin(base, filename),
+        checksum_url=urljoin(base, checksum or filename + ".sha256"), filename=filename,
+        checksum_algorithm=algorithm, torrent_url=urljoin(base, torrent) if torrent else None,
+        checksum_path_prefix=checksum_path_prefix)
 
 
 _entries = []
@@ -87,6 +97,91 @@ for arch, debarch, rpmarch, nixarch in (("x64", "amd64", "x86_64", "x86_64"), ("
     name = f"latest-nixos-minimal-{nixarch}-linux.iso"
     _entries.append(DistroImage(f"nixos-{key}", "NixOS", "26.05 Minimal", arch,
         f"https://channels.nixos.org/nixos-26.05/{name}", checksum_url=f"https://channels.nixos.org/nixos-26.05/{name}.sha256", filename=name))
+
+_entries += [
+    fixed("endeavouros", "EndeavourOS", "Titan Nova", "x64", "https://mirror.alpix.eu/endeavouros/iso/",
+          "EndeavourOS_Titan-Nova-2026.08.15.iso", "EndeavourOS_Titan-Nova-2026.08.15.iso.sha512sum",
+          algorithm="sha512", torrent="EndeavourOS_Titan-Nova-2026.08.15.iso.torrent"),
+    channel("artix", "Artix Linux", "Base OpenRC", "x64", "https://download.artixlinux.org/iso/",
+            r"artix-base-openrc-\d+-x86_64\.iso", "sha256sums"),
+    DistroImage("garuda", "Garuda Linux", "Dr460nized", "x64",
+        "https://iso.builds.garudalinux.org/iso/latest/garuda/dr460nized/latest.iso",
+        torrent_url="https://iso.builds.garudalinux.org/iso/latest/garuda/dr460nized/latest.iso.torrent",
+        checksum_url="https://iso.builds.garudalinux.org/iso/latest/garuda/dr460nized/latest.iso.sha256",
+        filename="latest.iso", checksum_filename_pattern=r"garuda-dr460nized-linux-garuda-\d+\.iso"),
+    fixed("antix", "antiX", "23.2 Full (sysVinit)", "x64",
+          "https://downloads.sourceforge.net/project/antix-linux/Final/antiX-23.2/",
+          "antiX-23.2_x64-full.iso", "README.txt"),
+    fixed("linuxlite", "Linux Lite", "7.2", "x64", "https://downloads.sourceforge.net/project/linux-lite/7.2/",
+          "linux-lite-7.2-64bit.iso"),
+    channel("deepin", "deepin", "25.0.1 Desktop", "x64", "https://cdimage.deepin.com/releases/25.0.1/amd64/",
+            r"deepin-desktop-community-25\.0\.1-amd64\.iso"),
+    fixed("sparky", "SparkyLinux", "8.4 Xfce", "x64", "https://downloads.sourceforge.net/project/sparkylinux/xfce/",
+          "sparkylinux-8.4-x86_64-xfce.iso", "sparkylinux-8.4-x86_64-xfce.iso.allsums.txt",
+          torrent="https://downloads.sourceforge.net/project/sparkylinux/torrents/sparkylinux-8.4-x86_64-xfce.iso.torrent"),
+    fixed("bazzite", "Bazzite", "Stable Desktop", "x64", "https://download.bazzite.gg/",
+          "bazzite-stable-amd64.iso", "bazzite-stable-amd64.iso-CHECKSUM"),
+    DistroImage("tails", "Tails", "Stable USB image", "x64", "https://download.tails.net/",
+        api_json_url="https://tails.net/install/v2/Tails/amd64/stable/latest.json", api_format="tails"),
+    fixed("rescuezilla", "Rescuezilla", "2.6.2 Noble", "x64", "https://github.com/rescuezilla/rescuezilla/releases/download/2.6.2/",
+          "rescuezilla-2.6.2-64bit.noble.iso", "SHA256SUM"),
+    fixed("systemrescue", "SystemRescue", "13.02", "x64", "https://fastly-cdn.system-rescue.org/releases/13.02/",
+          "systemrescue-13.02-amd64.iso", "https://www.system-rescue.org/releases/13.02/systemrescue-13.02-amd64.iso.sha256"),
+    channel("proxmox", "Proxmox VE", "Virtualization server installer", "x64", "https://enterprise.proxmox.com/iso/",
+            r"proxmox-ve_[\d.]+-\d+\.iso"),
+    channel("slint", "Slint", "15.0 Accessible desktop", "x64", "https://slackware.uk/slint/x86_64/slint-15.0/iso/",
+            r"slint64-15\.0-\d+\.iso", "", suffix=".sha256"),
+    channel("zorin", "Zorin OS", "18 Core", "x64", "https://plug-mirror.rcac.purdue.edu/zorin-iso/18/",
+            r"Zorin-OS-18[^/]*-Core-64-bit(?:-r\d+)?\.iso", "SHA256SUMS.txt"),
+    fixed("pureos", "PureOS", "11 Crimson GNOME", "x64", "https://storage.puri.sm/pureos/images/crimson/2026.05/gnome/",
+          "pureos-11-gnome-live-20260515_amd64.iso", "pureos-11-gnome-live-20260515_amd64.checksums_sha256.txt"),
+    fixed("nobara", "Nobara Linux", "44 Official", "x64", "https://nobara-images.nobaraproject.org/",
+          "Nobara-44-Official-2026-10-13.iso", "Nobara-44-Official-2026-10-13.iso.sha256sum"),
+    fixed("solus", "Solus", "2026-04-18 Budgie", "x64", "https://downloads.getsol.us/isos/2026-04-18/",
+          "Solus-Budgie-Release-2026-04-18.iso", "Solus-Budgie-Release-2026-04-18.iso.sha256sum"),
+    fixed("mx", "MX Linux", "25.3 Xfce", "x64", "https://downloads.sourceforge.net/project/mx-linux/Final/Xfce/",
+          "MX-25.3_Xfce_x64.iso"),
+    fixed("peppermint", "Peppermint OS", "Debian Xfce", "x64", "https://downloads.sourceforge.net/project/peppermintos/isos/XFCE/",
+          "PeppermintOS-Debian-64.iso", "PeppermintOS-Debian-64-sha512.checksum", algorithm="sha512"),
+    fixed("archcraft", "Archcraft", "2026.08", "x64", "https://downloads.sourceforge.net/project/archcraft/v26.08/",
+          "archcraft-2026.08.01-x86_64.iso", "archcraft-2026.08.01-x86_64.iso.sha256sum"),
+    channel("calculate", "Calculate Linux", "20261022 Desktop KDE", "x64", "https://mirror.calculate-linux.org/release/20261022/",
+            r"cld-20261022-x86_64\.iso"),
+    fixed("ultramarine", "Ultramarine Linux", "44 Plasma", "x64", "https://ultramarine-linux.org/fyra-images/isos/ultramarine/44/",
+          "ultramarine-plasma-44-live-anaconda-x86_64.iso", "ultramarine-plasma-44-live-anaconda-x86_64.iso.sha256sum",
+          checksum_path_prefix="artifacts/plasma-plasma-live-anaconda-x86_64-iso/"),
+    fixed("oracle", "Oracle Linux", "9.8 Boot installer", "x64", "https://yum.oracle.com/ISOS/OracleLinux/OL9/u8/x86_64/",
+          "OracleLinux-R9-U8-x86_64-boot.iso", "https://linux.oracle.com/security/gpg/checksum/OracleLinux-R9-U8-Server-x86_64.checksum"),
+    fixed("oracle-arm64", "Oracle Linux", "9.8 Boot UEK installer", "ARM64", "https://yum.oracle.com/ISOS/OracleLinux/OL9/u8/aarch64/",
+          "OracleLinux-R9-U8-aarch64-boot-uek.iso", "https://linux.oracle.com/security/gpg/checksum/OracleLinux-R9-U8-Server-aarch64.checksum"),
+    channel("proxmox-arm64", "Proxmox VE", "Virtualization server installer", "ARM64", "https://enterprise.proxmox.com/iso/",
+            r"proxmox-ve_[\d.]+-\d+-arm64\.iso"),
+    fixed("puppy", "Puppy Linux", "BookwormPup64 10.0.12", "x64",
+          "https://distro.ibiblio.org/puppylinux/puppy-bookwormpup/BookwormPup64/10.0.12/",
+          "BookwormPup64_10.0.12.iso", "BookwormPup64_10.0.12.iso-checksum.txt"),
+    fixed("gparted", "GParted Live", "1.8.1-6", "x64",
+          "https://downloads.sourceforge.net/project/gparted/gparted-live-stable/1.8.1-6/",
+          "gparted-live-1.8.1-6-amd64.iso", "https://gparted.org/gparted-live/stable/CHECKSUMS.TXT"),
+]
+for arch, name in (("x64", "x86_64"), ("ARM64", "aarch64")):
+    key = "x64" if arch == "x64" else "arm64"
+    _entries += [
+        channel(f"chimera-{key}", "Chimera Linux", "Live GNOME (musl / dinit)", arch,
+                "https://repo.chimera-linux.org/live/latest/", rf"chimera-linux-{name}-LIVE-\d+-gnome\.iso", "sha256sums.txt"),
+        fixed(f"openeuler-{key}", "openEuler", "24.03 LTS SP3 Installer", arch,
+              f"https://repo.openeuler.org/openEuler-24.03-LTS-SP3/ISO/{name}/",
+              f"openEuler-24.03-LTS-SP3-{name}-dvd.iso", f"openEuler-24.03-LTS-SP3-{name}-dvd.iso.sha256sum"),
+        fixed(f"vanilla-{key}", "Vanilla OS", "3 Stable", arch,
+              "https://github.com/Vanilla-OS/live-iso/releases/download/3.0/",
+              f"Vanilla-OS-3-stable-{'amd64' if arch == 'x64' else 'arm64'}.20260828.iso",
+              f"Vanilla-OS-3-stable-{'amd64' if arch == 'x64' else 'arm64'}.20260828.sha256.txt"),
+        fixed(f"rhino-{key}", "Rhino Linux", "2026.1 Desktop", arch,
+              "https://downloads.sourceforge.net/project/rhino-linux-builder/2026.1/",
+              f"Rhino-Linux-2026.1-{'amd64' if arch == 'x64' else 'arm64'}.iso"),
+        fixed(f"parrot-{key}", "Parrot OS", "7.4 Home", arch, "https://download.parrot.sh/parrot/iso/7.4/",
+              f"Parrot-home-7.4_{'amd64' if arch == 'x64' else 'arm64'}.iso", "signed-hashes.txt",
+              torrent=f"Parrot-home-7.4_{'amd64' if arch == 'x64' else 'arm64'}.iso.torrent"),
+    ]
 
 CATALOG = tuple(_entries)
 
@@ -150,7 +245,9 @@ def _latest(names):
 def _digest(text, filename, algorithm, *, per_image=False):
     # A filename-free hash is acceptable only at an explicit per-image URL.
     length = {"sha256": 64, "sha512": 128}[algorithm]
-    if per_image and re.fullmatch(rf"\s*[a-fA-F0-9]{{{length}}}\s*", text):
+    if re.fullmatch(rf"\s*[a-fA-F0-9]{{{length}}}\s*", text):
+        if not per_image:
+            raise DownloadError("Контрольная сумма без имени допустима только для отдельного файла образа.")
         return text.strip().lower()
     return checksum_from_manifest(text, filename, algorithm)
 
@@ -196,6 +293,25 @@ def _resolve_image(entry):
         return replace(entry, image_url=url, checksum_url=checksum_url, publisher_page_url="")
     if entry.api_json_url:
         data = json.loads(_metadata(entry.api_json_url))
+        if entry.api_format == "tails":
+            candidates = [target for installation in data.get("installations", [])
+                          for path in installation.get("installation-paths", []) if path.get("type") == "img"
+                          for target in path.get("target-files", [])]
+            if (data.get("product-name") != "Tails" or data.get("build_target") != "amd64"
+                    or data.get("channel") != "stable" or len(candidates) != 1):
+                raise DownloadError("Tails: не найден единственный официальный USB-образ amd64.")
+            url, digest = candidates[0].get("url", ""), candidates[0].get("sha256", "")
+            parsed = urlsplit(url)
+            filename = parsed.path.rsplit("/", 1)[-1]
+            if (parsed.scheme != "https" or parsed.netloc != "download.tails.net"
+                    or parsed.query or parsed.fragment
+                    or not re.fullmatch(r"/tails/stable/tails-amd64-([\d.]+)/tails-amd64-\1\.img", parsed.path)
+                    or not re.fullmatch(r"[a-fA-F0-9]{64}", digest)):
+                raise DownloadError("Tails: некорректные URL или SHA-256 официального USB-образа.")
+            return replace(entry, image_url=url, filename=filename, sha256=digest.lower(),
+                           checksum_url=entry.api_json_url, api_json_url="")
+        if entry.api_format != "popos":
+            raise DownloadError("Неизвестный формат метаданных дистрибутива.")
         url, digest = data.get("url", ""), data.get("sha_sum", "")
         if urlsplit(url).scheme != "https" or urlsplit(url).hostname != "iso.pop-os.org" or not re.fullmatch(r"[0-9a-fA-F]{64}", digest):
             raise DownloadError("Pop!_OS: официальный API не вернул доверенный ISO и SHA-256.")
@@ -206,7 +322,12 @@ def _resolve_image(entry):
     if not entry.pattern:
         manifest = _metadata(entry.checksum_url)
         filename = entry.filename
-        if filename.startswith("latest-nixos-"):
+        if entry.checksum_filename_pattern:
+            candidates = _manifest_names(manifest)
+            if len(candidates) != 1 or not re.fullmatch(entry.checksum_filename_pattern, next(iter(candidates))):
+                raise DownloadError("Контрольная сумма относится к другому образу или архитектуре.")
+            filename = next(iter(candidates))
+        elif filename.startswith("latest-nixos-"):
             candidates = _manifest_names(manifest)
             if len(candidates) == 1:
                 candidate = next(iter(candidates))
@@ -221,9 +342,12 @@ def _resolve_image(entry):
                 expected = rf"openSUSE-Tumbleweed-NET-{arch}-(?:Current|Snapshot\d+-Media)\.iso" if filename.startswith("openSUSE") else rf"CentOS-Stream-9-(?:latest|[\d.]+)-{arch}-dvd1\.iso"
                 if re.fullmatch(expected, candidate):
                     filename = candidate
-        digest = _digest(manifest, filename, entry.checksum_algorithm,
-                         per_image=entry.checksum_url in (entry.image_url + ".sha256", entry.image_url + ".SHA256SUM"))
-        return replace(entry, filename=filename, sha256=digest if entry.checksum_algorithm == "sha256" else None)
+        digest = _digest(manifest, entry.checksum_path_prefix + filename, entry.checksum_algorithm,
+                         per_image=entry.checksum_url in tuple(entry.image_url + suffix for suffix in
+                             (".sha256", ".SHA256SUM", ".sha256sum", ".sha512", ".sha512sum"))
+                         or entry.checksum_url == entry.image_url.removesuffix(".iso") + ".sha256.txt")
+        return replace(entry, filename=filename, sha256=digest if entry.checksum_algorithm == "sha256" else None,
+                       sha512=digest if entry.checksum_algorithm == "sha512" else None)
     base = entry.image_url
     checksum_url = entry.checksum_url
     if entry.checksum_suffix or entry.checksum_pattern:
@@ -253,6 +377,7 @@ def _resolve_image(entry):
         arch_date=filename.removeprefix("archlinux-").removesuffix("-x86_64.iso")) if entry.torrent_template else None
     return replace(entry, image_url=image_url, filename=filename, checksum_url=checksum_url,
                    torrent_url=torrent, sha256=digest if entry.checksum_algorithm == "sha256" else None,
+                   sha512=digest if entry.checksum_algorithm == "sha512" else None,
                    pattern="", checksum_pattern="", checksum_suffix="", torrent_template="")
 
 
@@ -271,6 +396,9 @@ def discover_torrent(image):
         "bodhi": "https://sourceforge.net/projects/bodhilinux/files/7.0.0/",
     }
     index = indexes.get(image.id, urljoin(image.image_url, "."))
+    if index.startswith("https://downloads.sourceforge.net/project/"):
+        project, _, path = urlsplit(index).path.removeprefix("/project/").partition("/")
+        index = f"https://sourceforge.net/projects/{project}/files/{path}"
     try:
         parser = _Links()
         parser.feed(fetch(index, limit=4 * 1024 * 1024).decode("utf-8", errors="replace"))

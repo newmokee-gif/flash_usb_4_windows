@@ -9,7 +9,7 @@ from html.parser import HTMLParser
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "прога"))
 from distro_catalog import CATALOG, resolve_image, metadata_diagnostics
-from image_download import fetch
+from image_download import fetch, torrent_target
 
 
 class Links(HTMLParser):
@@ -54,6 +54,7 @@ def validate(entry):
                 data = fetch(image.torrent_url, limit=4*1024*1024)
                 if not data.startswith(b"d"):
                     raise RuntimeError("Not bencoded torrent metadata")
+                torrent_target(data, image.filename)
                 result["torrent"] = "ok"
             except Exception as error:
                 result["torrent"] = "HTTPS fallback: " + str(error)
@@ -76,6 +77,9 @@ def main():
     Path("distro-catalog-validation.json").write_text(json.dumps(results, indent=2, ensure_ascii=False), encoding="utf-8")
     failed = [r for r in results if r["status"] != "ok"]
     print(f"Resolved {len(results)-len(failed)}/{len(results)} official images; {len({e.distro for e in CATALOG})} distributions.")
+    print(f"::notice::Catalogue result: {len(results)-len(failed)}/{len(results)} images; "
+          f"{len({e.distro for e in CATALOG})} distributions; "
+          f"{sum(e.architecture == 'ARM64' for e in CATALOG)} ARM64 variants", flush=True)
     return bool(failed)
 
 
