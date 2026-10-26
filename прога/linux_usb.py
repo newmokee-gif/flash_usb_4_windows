@@ -63,13 +63,38 @@ def _tool(name: str):
     return shutil.which(name, path="/usr/sbin:/usr/bin:/sbin:/bin")
 
 
+def subprocess_environment(*, restart_app=False):
+    """Keep bundled runtime libraries out of host utilities and fresh launches.
+
+    PyInstaller prepends its private libraries to LD_LIBRARY_PATH. Passing that
+    environment to the host mount/wimlib/polkit tools can load incompatible
+    libraries. Change only the child's environment; Tk still needs our bundle.
+    """
+    environment = os.environ.copy()
+    if getattr(sys, "frozen", False):
+        original = environment.pop("LD_LIBRARY_PATH_ORIG", None)
+        if original:
+            environment["LD_LIBRARY_PATH"] = original
+        else:
+            environment.pop("LD_LIBRARY_PATH", None)
+        if restart_app:
+            for name in tuple(environment):
+                if name.startswith("_PYI_") or name in ("_MEIPASS2", "TCL_LIBRARY", "TK_LIBRARY"):
+                    environment.pop(name)
+            # A new privileged process must initialize its own bundle, not
+            # reuse a temporary/FUSE directory owned by the GUI's user.
+            environment["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    return environment
+
+
 def _run(args: list[str], timeout: int = 120) -> subprocess.CompletedProcess:
     executable = _tool(args[0])
     if executable is None:
         raise USBError(f"Missing system tool: {args[0]}")
     try:
         result = subprocess.run([executable, *args[1:]], text=True, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=timeout, check=False)
+                                stderr=subprocess.PIPE, timeout=timeout, check=False,
+                                env=subprocess_environment())
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise USBError(f"Command failed: {args[0]}: {exc}") from exc
     if result.returncode:

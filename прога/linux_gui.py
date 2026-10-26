@@ -10,7 +10,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
-from linux_usb import USBError, check_dependencies, list_devices
+from linux_usb import USBError, check_dependencies, list_devices, subprocess_environment
 
 
 class LinuxUSB:
@@ -86,9 +86,13 @@ class LinuxUSB:
         confirmation = simpledialog.askstring("Удаление данных", f"Все данные будут удалены:\n{device.label}\n\nВведите точный путь {device.path} для подтверждения:")
         if confirmation != device.path:
             return
-        command = build_write_command(iso, device, confirmation)
+        try:
+            command = build_write_command(iso, device, confirmation)
+        except USBError as exc:
+            messagebox.showerror("Запуск", str(exc))
+            return
         if os.geteuid() != 0:
-            pkexec = shutil.which("pkexec")
+            pkexec = shutil.which("pkexec", path="/usr/sbin:/usr/bin:/sbin:/bin")
             if not pkexec:
                 messagebox.showerror("Права", "Установите polkit/pkexec или используйте sudo python3 flash_usb.py write (см. README).")
                 return
@@ -105,7 +109,8 @@ class LinuxUSB:
     def worker(self, command):
         code = 1
         try:
-            with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True) as process:
+            with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                  text=True, env=subprocess_environment(restart_app=True)) as process:
                 for line in process.stdout:
                     self.events.put(("log", line.rstrip()))
                 code = process.wait()
@@ -139,9 +144,19 @@ class LinuxUSB:
 
 
 def build_write_command(iso, device, confirmation):
-    return [sys.executable, "-u", str(Path(__file__).with_name("linux_usb.py")),
-            "write", str(Path(iso).resolve()), device.path, "--confirm", confirmation,
-            "--expected-identity", json.dumps(device.identity)]
+    arguments = ["write", str(Path(iso).resolve()), device.path, "--confirm", confirmation,
+                 "--expected-identity", json.dumps(device.identity)]
+    if getattr(sys, "frozen", False):
+        image = os.environ.get("APPIMAGE")
+        if image:
+            path = Path(image)
+            if not path.is_absolute() or not path.is_file() or not os.access(path, os.X_OK):
+                raise USBError("AppImage недоступен. Сохраните файл, разрешите его выполнение и запустите снова.")
+            # root cannot traverse the desktop user's private FUSE mount.
+            # Start the original image, extracting a separate runtime as root.
+            return [str(path), "--appimage-extract-and-run", *arguments]
+        return [sys.executable, *arguments]
+    return [sys.executable, "-u", str(Path(__file__).with_name("linux_usb.py")), *arguments]
 
 
 def main():

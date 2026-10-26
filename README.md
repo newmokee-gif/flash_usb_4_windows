@@ -21,6 +21,30 @@ sudo dnf install ./flash-usb-0.2.0-0.2.linux.noarch.rpm
 
 Это готовые системные пакеты Python-приложения (`all`/`noarch`), не автономные исполняемые файлы: системный Python, Tkinter и утилиты записи устанавливает менеджер пакетов. Сборка вручную и pip не нужны. Пакеты проверяются установкой, запуском от обычного пользователя и удалением в чистых контейнерах Debian/Fedora. Для Arch используйте исходный архив и команды ниже. Контрольные суммы пакетов находятся в `SHA256SUMS-packages.txt`.
 
+### AppImage (x86_64)
+
+Скачайте `flash-usb-v0.2.0-linux.2-x86_64.AppImage` из релиза. Python и Tkinter уже включены; установка приложения не нужна:
+
+```sh
+chmod +x flash-usb-v0.2.0-linux.2-x86_64.AppImage
+./flash-usb-v0.2.0-linux.2-x86_64.AppImage
+# Если FUSE недоступен:
+./flash-usb-v0.2.0-linux.2-x86_64.AppImage --appimage-extract-and-run
+```
+
+Поддерживается x86_64 с glibc 2.36+ (Debian 12+, современные Fedora/Arch). Для графического интерфейса нужна рабочая графическая сессия; для подтверждения прав — агент polkit. Утилиты работы с дисками устанавливаются в системе:
+
+```sh
+# Debian
+sudo apt install util-linux mount parted dosfstools wimtools udev pkexec fonts-dejavu-core
+# Fedora
+sudo dnf install util-linux parted dosfstools wimlib-utils systemd-udev polkit dejavu-sans-fonts
+# Arch
+sudo pacman -Syu --needed util-linux parted dosfstools wimlib systemd polkit ttf-dejavu
+```
+
+Проверка зависимостей: `./flash-usb-v0.2.0-linux.2-x86_64.AppImage --appimage-extract-and-run check`. CLI использует те же команды `list`/`write`, что и обычная версия. Контрольная сумма опубликована в `SHA256SUMS-AppImage.txt`. AppImage не предназначен для ARM64 и musl/Alpine. Проверки CI выполняются без FUSE и без записи реальных USB.
+
 ### Запуск из исходников
 
 Установите системные зависимости:
@@ -63,6 +87,6 @@ python3 flash_usb.py check
 
 ## Релизы
 
-В релизах доступны готовые пакеты `.deb`/`.rpm` и исходный Linux-архив с тестами и инструкциями. Контрольные суммы SHA-256 публикуются рядом с файлами. Предварительные релизы отмечены как pre-release, пока не проверены реальные USB и загрузка на оборудовании.
+В релизах доступны готовые пакеты `.deb`/`.rpm`, AppImage для x86_64 и исходный Linux-архив с тестами и инструкциями. Контрольные суммы SHA-256 публикуются рядом с файлами. Предварительные релизы отмечены как pre-release, пока не проверены реальные USB и загрузка на оборудовании.
 
 Сборка пакетов для разработчиков: `python3 packaging/build.py deb --output /tmp/flash-usb-packages` (нужен `dpkg-deb`) или `python3 packaging/build.py rpm --output /tmp/flash-usb-packages` (нужен `rpmbuild`). CI проверяет оба пакета до добавления в существующий релиз.
