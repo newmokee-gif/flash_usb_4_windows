@@ -16,8 +16,14 @@ def main():
         else:
             from linux_gui import main as gui_main
             gui_main()
+    elif sys.platform == "darwin":
+        if len(sys.argv) > 1:
+            runpy.run_path(str(source / "macos_usb.py"), run_name="__main__")
+        else:
+            from macos_gui import main as gui_main
+            gui_main()
     else:
-        sys.exit("Supported platforms: Windows and Linux (Debian, Fedora, Arch).")
+        sys.exit("Supported platforms: Windows, Linux and macOS.")
 
 
 if __name__ == "__main__":

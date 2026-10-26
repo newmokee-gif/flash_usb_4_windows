@@ -72,6 +72,12 @@ def subprocess_environment(*, restart_app=False):
     """
     environment = os.environ.copy()
     if getattr(sys, "frozen", False):
+        if sys.platform == "darwin":
+            # Host diskutil/osascript and a fresh bundle must not inherit
+            # injected loader settings from the current frozen process.
+            for name in tuple(environment):
+                if name.startswith("DYLD_"):
+                    environment.pop(name)
         original = environment.pop("LD_LIBRARY_PATH_ORIG", None)
         if original:
             environment["LD_LIBRARY_PATH"] = original
@@ -319,7 +325,8 @@ def _digest(path: Path) -> str:
     return result.hexdigest()
 
 
-def _verify_source_wims(source: Path, files, log):
+def _verify_source_wims(source: Path, files, log, *, runner=None):
+    run = runner or _run
     for relative, _ in files:
         key = relative.as_posix().casefold()
         if key not in ("sources/boot.wim", "sources/install.wim", "sources/install.esd", "sources/install.swm"):
@@ -331,10 +338,11 @@ def _verify_source_wims(source: Path, files, log):
             # case differs from the image; wimlib accepts repeated --ref options.
             args.extend(f"--ref={source / part}" for part, _ in files
                         if part.parent == relative.parent and part.suffix.casefold() == ".swm")
-        _run(args, timeout=7200)
+        run(args, timeout=7200)
 
 
-def _verify_target(source: Path, target: Path, files, split_wim, log):
+def _verify_target(source: Path, target: Path, files, split_wim, log, *, runner=None):
+    run = runner or _run
     for relative, size in files:
         if relative == split_wim:
             continue
@@ -343,8 +351,8 @@ def _verify_target(source: Path, target: Path, files, split_wim, log):
             raise USBError(f"Readback verification failed: {relative}")
     if split_wim:
         destination = target / split_wim.parent / "install.swm"
-        _run(["wimlib-imagex", "verify", str(destination), f"--ref={destination.parent}/install*.swm"], timeout=7200)
-    log("Readback checks passed after unmounting and flushing block-device caches")
+        run(["wimlib-imagex", "verify", str(destination), f"--ref={destination.parent}/install*.swm"], timeout=7200)
+    log("Readback checks passed")
 
 
 @contextmanager
@@ -363,7 +371,8 @@ def _device_lock(device: str):
             os.close(descriptor)
 
 
-def _copy_and_verify(source: Path, target: Path, files, split_wim, log: Callable[[str], None]):
+def _copy_and_verify(source: Path, target: Path, files, split_wim, log: Callable[[str], None], *, runner=None):
+    run = runner or _run
     for relative, size in files:
         if relative == split_wim:
             continue
@@ -377,11 +386,11 @@ def _copy_and_verify(source: Path, target: Path, files, split_wim, log: Callable
         destination = target / split_wim.parent / "install.swm"
         destination.parent.mkdir(parents=True, exist_ok=True)
         log("Splitting install.wim into FAT32-compatible parts (this can take time)")
-        _run(["wimlib-imagex", "split", str(source / split_wim), str(destination), "3800", "--check"], timeout=7200)
+        run(["wimlib-imagex", "split", str(source / split_wim), str(destination), "3800", "--check"], timeout=7200)
         parts = sorted(destination.parent.glob("install*.swm"))
         if not parts or any(p.stat().st_size > FAT32_MAX for p in parts):
             raise USBError("Invalid or missing split WIM parts")
-        _run(["wimlib-imagex", "verify", str(destination), f"--ref={destination.parent}/install*.swm"], timeout=7200)
+        run(["wimlib-imagex", "verify", str(destination), f"--ref={destination.parent}/install*.swm"], timeout=7200)
         log("Split WIM integrity verified")
 
 

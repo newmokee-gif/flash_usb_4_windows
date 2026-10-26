@@ -1,0 +1,131 @@
+name: macOS Apple Silicon and Intel
+
+on:
+  push:
+    branches: [linux-support]
+    tags: ['macos-v*-linux*']
+    paths:
+      - прога/macos_*.py
+      - прога/linux_usb.py
+      - прога/linux_gui.py
+      - packaging/macos/**
+      - tests/test_macos*.py
+      - tests/smoke_macos_images.py
+      - .github/workflows/macos.yml
+      - flash_usb.py
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            python_arch: arm64
+            machine: arm64
+            name: AppleSilicon
+          - runner: macos-15-intel
+            python_arch: x64
+            machine: x86_64
+            name: Intel
+    runs-on: ${{ matrix.runner }}
+    name: Native macOS ${{ matrix.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.13'
+          architecture: ${{ matrix.python_arch }}
+      - name: Install native build and WIM dependencies
+        run: |
+          test "$(uname -m)" = '${{ matrix.machine }}'
+          brew install wimlib
+          python -m pip install PyInstaller==6.22.3
+      - name: Tests, read-only discovery, real WIM fixture and bundle validation
+        env:
+          MACOS_ARCH: ${{ matrix.machine }}
+        run: |
+          set +e
+          (
+            set -e
+            python -m unittest discover -s tests -p 'test_macos*.py' -v
+            python прога/macos_usb.py check
+            python прога/macos_usb.py list
+            fixture=$(mktemp -d)
+            mkdir "$fixture/content"
+            for part in a b c; do
+              dd if=/dev/urandom of="$fixture/content/$part" bs=1048576 count=1 2>/dev/null
+            done
+            wimlib-imagex capture "$fixture/content" "$fixture/fixture.wim" --compress=none --check
+            wimlib-imagex split "$fixture/fixture.wim" "$fixture/install.swm" 1 --check
+            wimlib-imagex verify "$fixture/install.swm" "--ref=$fixture/install*.swm"
+            python tests/smoke_macos_images.py --wim "$fixture/fixture.wim"
+            python packaging/macos/build.py --arch "$MACOS_ARCH" --output macos-dist
+          ) 2>&1 | tee macos-check.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python -c 'from pathlib import Path; t=Path("macos-check.log").read_text(errors="replace")[-3000:]; print("::error::"+t.replace("%","%25").replace("\r","%0D").replace("\n","%0A"))'
+          fi
+          exit "$result"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ matrix.name }}
+          path: macos-dist/*
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/macos-v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: macos-*
+          merge-multiple: true
+          path: macos-dist
+      - name: Add both validated macOS applications to the existing release
+        working-directory: macos-dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          release="${GITHUB_REF_NAME#macos-}"
+          sha256sum -c SHA256SUMS-macOS-AppleSilicon.txt
+          sha256sum -c SHA256SUMS-macOS-Intel.txt
+          gh release view "$release"
+          gh release upload "$release" WinUSB-Creator-macOS-AppleSilicon.zip WinUSB-Creator-macOS-Intel.zip SHA256SUMS-macOS-AppleSilicon.txt SHA256SUMS-macOS-Intel.txt
+          gh release view "$release" --json body --jq .body > release-notes.md
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          p = Path('release-notes.md')
+          p.write_text(p.read_text() + '''
+
+          ## macOS: Apple Silicon and Intel
+
+          macOS15+ native bundles: `WinUSB-Creator-macOS-AppleSilicon.zip` (M-series)
+          and `WinUSB-Creator-macOS-Intel.zip` (Intel Macs).
+          Extract the ZIP and move the complete `WinUSB Creator.app` to Applications.
+          Python/Tk are bundled; install the external image tool with `brew install wimlib`.
+          The program creates Windows UEFI installation USBs for compatible target hardware.
+          It does not enable native Windows USB boot on Apple Silicon.
+
+          These prerelease applications are ad-hoc signed for integrity, not Developer ID
+          signed or notarized. If Gatekeeper blocks the downloaded app, verify its SHA256
+          and use the supported Open Anyway action in System Settings > Privacy & Security
+          only if you trust it. Do not disable Gatekeeper globally.
+          Native Mach-O architecture/signature checks, GUI/CLI subprocess checks, disk-safety
+          unit tests and real WIM operations passed on Apple Silicon and Intel macOS runners.
+          Physical USB writing, firmware boot and interactive administrator authorization
+          have not been validated. Checksums accompany each ZIP.
+          ''' + '\nmacOS source commit: `' + os.environ['GITHUB_SHA'] + '`.\n')
+          PY
+          gh release edit "$release" --notes-file release-notes.md

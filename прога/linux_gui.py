@@ -55,7 +55,7 @@ class LinuxUSB:
 
     def refresh(self):
         try:
-            all_devices = list_devices()
+            all_devices = self.enumerate_devices()
             self.devices = [device for device in all_devices if device.safe]
             self.combo["values"] = [device.label for device in self.devices]
             self.combo.set("")
@@ -78,7 +78,7 @@ class LinuxUSB:
         if not self.iso.get() or not iso.is_file():
             messagebox.showerror("ISO", "Выберите существующий ISO-файл.")
             return
-        missing = check_dependencies()
+        missing = self.missing_dependencies()
         if missing:
             messagebox.showerror("Зависимости", "Установите зависимости из README: " + ", ".join(missing))
             return
@@ -87,18 +87,27 @@ class LinuxUSB:
         if confirmation != device.path:
             return
         try:
-            command = build_write_command(iso, device, confirmation)
+            command = self.prepare_write_command(iso, device, confirmation)
         except USBError as exc:
             messagebox.showerror("Запуск", str(exc))
             return
+        self.set_busy(True)
+        threading.Thread(target=self.worker, args=(command,), daemon=False).start()
+
+    def enumerate_devices(self):
+        return list_devices()
+
+    def missing_dependencies(self):
+        return check_dependencies()
+
+    def prepare_write_command(self, iso, device, confirmation):
+        command = build_write_command(iso, device, confirmation)
         if os.geteuid() != 0:
             pkexec = shutil.which("pkexec", path="/usr/sbin:/usr/bin:/sbin:/bin")
             if not pkexec:
-                messagebox.showerror("Права", "Установите polkit/pkexec или используйте sudo python3 flash_usb.py write (см. README).")
-                return
+                raise USBError("Установите polkit/pkexec или используйте sudo python3 flash_usb.py write (см. README).")
             command.insert(0, pkexec)
-        self.set_busy(True)
-        threading.Thread(target=self.worker, args=(command,), daemon=False).start()
+        return command
 
     def set_busy(self, busy):
         self.busy = busy
