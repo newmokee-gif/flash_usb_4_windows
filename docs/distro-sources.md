@@ -14,10 +14,10 @@ ISO, а не утверждение о поддержке всех сущест�
 | Debian | cdimage.debian.org | x64, ARM64 netinst |
 | Fedora | download.fedoraproject.org, torrent.fedoraproject.org | x64, ARM64 Workstation |
 | Arch Linux | geo.mirror.pkgbuild.com, archlinux.org | x64 |
-| Void Linux | repo-default.voidlinux.org | x64 glibc Base |
+| Void Linux | repo-fastly.voidlinux.org (официальное зеркало xmirror) | x64 glibc Base |
 | Devuan | files.devuan.org | x64 Desktop Live |
 | Linux Mint | mirrors.kernel.org/linuxmint, torrents.linuxmint.com | x64 Cinnamon |
-| KDE neon | files.kde.org/neon | x64 User |
+| Gentoo | distfiles.gentoo.org | x64 Minimal Installation |
 | Rocky Linux | dl.rockylinux.org | x64, ARM64 Minimal |
 | AlmaLinux | repo.almalinux.org | x64, ARM64 Minimal |
 | CentOS Stream | mirror.stream.centos.org | x64, ARM64 DVD |
@@ -27,7 +27,7 @@ ISO, а не утверждение о поддержке всех сущест�
 | NixOS | channels.nixos.org | x64, ARM64 Minimal |
 | BunsenLabs | ddl.bunsenlabs.org | x64 Boron Live |
 | Bodhi Linux | SourceForge / bodhilinux | x64 Standard |
-| Peppermint OS | SourceForge / peppermintos | x64 Debian Xfce |
+| Mageia | mageia.org → зеркало, выбранное издателем | x64 Live Xfce |
 | Porteus | mirrors.dotsrc.org/porteus | x64 Xfce |
 | Pop!_OS | api.pop-os.org, iso.pop-os.org | x64 Intel/AMD |
 

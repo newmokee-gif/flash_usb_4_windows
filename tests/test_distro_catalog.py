@@ -57,3 +57,27 @@ class CatalogTests(unittest.TestCase):
         html = '<a href="./one.iso">a</a><a href="https://example.org/iso/two.iso">b</a><a href="https://other.org/iso/evil.iso">c</a>'
         with patch.object(catalog, "_metadata", return_value=html):
             self.assertEqual(catalog._links("https://example.org/iso/"), ["one.iso", "two.iso"])
+
+    def test_gentoo_publisher_pointer_requires_named_sha512(self):
+        entry = next(e for e in catalog.CATALOG if e.id == "gentoo")
+        filename = "install-amd64-minimal-20261025T170000Z.iso"
+        pointer = "20261025T170000Z/" + filename + " 123456\n"
+        with patch.object(catalog, "_metadata", side_effect=[pointer, "# SHA512 HASH\n" + "a"*128 + "  " + filename]):
+            resolved = catalog.resolve_image(entry)
+        self.assertEqual(resolved.filename, filename)
+        self.assertTrue(resolved.checksum_url.endswith(".iso.DIGESTS"))
+        self.assertEqual(resolved.checksum_algorithm, "sha512")
+
+    def test_gentoo_rejects_traversing_pointer(self):
+        entry = next(e for e in catalog.CATALOG if e.id == "gentoo")
+        with patch.object(catalog, "_metadata", return_value="../../untrusted.iso"):
+            with self.assertRaises(catalog.DownloadError):
+                catalog.resolve_image(entry)
+
+    def test_mageia_uses_publisher_mirror_with_https(self):
+        entry = next(e for e in catalog.CATALOG if e.id == "mageia")
+        url = "https://mirror.example/" + entry.filename
+        with patch.object(catalog, "_metadata", side_effect=[f'<a href="{url}">download</a>', "b"*128 + "  " + entry.filename]):
+            resolved = catalog.resolve_image(entry)
+        self.assertEqual(resolved.image_url, url)
+        self.assertEqual(resolved.checksum_url, url + ".sha512")

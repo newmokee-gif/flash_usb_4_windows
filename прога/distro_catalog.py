@@ -31,6 +31,8 @@ class DistroImage:
     checksum_suffix: str = ""
     torrent_template: str = ""
     api_json_url: str = ""
+    release_pointer_url: str = ""
+    publisher_page_url: str = ""
 
 
 def channel(id, name, edition, arch, base, pattern, manifest="SHA256SUMS", *, torrent="", algorithm="sha256", checksum_pattern="", suffix=""):
@@ -56,14 +58,14 @@ _entries += [
     channel("ubuntu", "Ubuntu", "24.04 LTS Desktop", "x64", "https://releases.ubuntu.com/24.04/", r"ubuntu-24\.04(?:\.\d+)?-desktop-amd64\.iso", torrent="{image_url}.torrent"),
     channel("ubuntu-arm64", "Ubuntu", "24.04 LTS Server", "ARM64", "https://cdimage.ubuntu.com/releases/24.04/release/", r"ubuntu-24\.04(?:\.\d+)?-live-server-arm64\.iso", torrent="{image_url}.torrent"),
     channel("arch", "Arch Linux", "Installation ISO", "x64", "https://geo.mirror.pkgbuild.com/iso/latest/", r"archlinux-\d{4}\.\d{2}\.\d{2}-x86_64\.iso", "sha256sums.txt", torrent="https://archlinux.org/releng/releases/{arch_date}/torrent/"),
-    channel("void", "Void Linux", "glibc Base", "x64", "https://repo-default.voidlinux.org/live/current/", r"void-live-x86_64-\d+-base\.iso", "sha256sum.txt"),
-    channel("devuan", "Devuan", "Daedalus Desktop Live", "x64", "https://files.devuan.org/devuan_daedalus/desktop-live/", r"devuan_daedalus_.*_amd64_desktop-live\.iso", "SHASUMS.txt"),
+    channel("void", "Void Linux", "glibc Base", "x64", "https://repo-fastly.voidlinux.org/live/current/", r"void-live-x86_64-\d+-base\.iso", "sha256sum.txt"),
+    channel("devuan", "Devuan", "Daedalus Desktop Live", "x64", "https://files.devuan.org/devuan_daedalus/desktop-live/", r"devuan_daedalus_.*_amd64_desktop-live\.iso", "SHA256SUMS.txt"),
     channel("mint", "Linux Mint", "22.1 Cinnamon", "x64", "https://mirrors.kernel.org/linuxmint/stable/22.1/", r"linuxmint-22\.1-cinnamon-64bit\.iso", "sha256sum.txt", torrent="https://torrents.linuxmint.com/torrents/{filename}.torrent"),
-    channel("neon", "KDE neon", "User Edition", "x64", "https://files.kde.org/neon/images/user/current/", r"neon-user-.*\.iso", "", checksum_pattern=r".*\.sha256(?:sum)?"),
+    DistroImage("gentoo", "Gentoo", "Minimal Installation", "x64", "https://distfiles.gentoo.org/releases/amd64/autobuilds/", checksum_algorithm="sha512", release_pointer_url="https://distfiles.gentoo.org/releases/amd64/autobuilds/latest-iso.txt"),
     channel("bunsenlabs", "BunsenLabs", "Stable Live", "x64", "https://ddl.bunsenlabs.org/ddl/", r"[a-z]+-[A-Za-z0-9_.+-]*amd64[A-Za-z0-9_.+-]*\.iso", "release.sha256.txt"),
     channel("porteus", "Porteus", "5.01 Xfce", "x64", "https://mirrors.dotsrc.org/porteus/x86_64/Porteus-v5.01/", r"Porteus-(?i:xfce)-v5\.01-x86_64\.iso", "sha256sums.txt"),
     DistroImage("bodhi", "Bodhi Linux", "7.0.0 Standard", "x64", "https://downloads.sourceforge.net/project/bodhilinux/7.0.0/bodhi-7.0.0-64.iso", checksum_url="https://downloads.sourceforge.net/project/bodhilinux/7.0.0/bodhi-7.0.0-64.iso.sha256", filename="bodhi-7.0.0-64.iso"),
-    DistroImage("peppermint", "Peppermint OS", "Debian Xfce", "x64", "https://downloads.sourceforge.net/project/peppermintos/isos/XFCE/PeppermintOS-Debian-64.iso", checksum_url="https://downloads.sourceforge.net/project/peppermintos/isos/XFCE/PeppermintOS-Debian-64.iso-sha512.checksum", checksum_algorithm="sha512", filename="PeppermintOS-Debian-64.iso"),
+    DistroImage("mageia", "Mageia", "9 Live Xfce", "x64", "https://www.mageia.org/", checksum_algorithm="sha512", filename="Mageia-9-Live-Xfce-x86_64.iso", publisher_page_url="https://www.mageia.org/en/downloads/get/?q=Mageia-9-Live-Xfce-x86_64.iso"),
     DistroImage("popos", "Pop!_OS", "22.04 Intel/AMD", "x64", "https://iso.pop-os.org/", api_json_url="https://api.pop-os.org/builds/22.04/intel"),
 ]
 for arch, debarch, rpmarch, nixarch in (("x64", "amd64", "x86_64", "x86_64"), ("ARM64", "arm64", "aarch64", "aarch64")):
@@ -151,6 +153,29 @@ def _digest(text, filename, algorithm, *, per_image=False):
 def resolve_image(entry):
     """Resolve official metadata to one image whose exact checksum is known."""
     _trace.url, _trace.text = "", ""
+    if entry.release_pointer_url:
+        text = _metadata(entry.release_pointer_url)
+        names = re.findall(r"(?m)^(\d{8}T\d{6}Z/install-amd64-minimal-\d{8}T\d{6}Z\.iso)(?:\s|$)", text)
+        if len(names) != 1:
+            raise DownloadError("Gentoo: не найден единственный актуальный минимальный ISO.")
+        url = urljoin(entry.image_url, names[0])
+        filename = names[0].rsplit("/", 1)[-1]
+        checksum_url = url + ".DIGESTS"
+        checksum_from_manifest(_metadata(checksum_url), filename, entry.checksum_algorithm)
+        return replace(entry, image_url=url, filename=filename, checksum_url=checksum_url, release_pointer_url="")
+    if entry.publisher_page_url:
+        parser = _Links()
+        parser.feed(_metadata(entry.publisher_page_url))
+        urls = [urljoin(entry.publisher_page_url, link) for link in parser.links]
+        urls = [url for url in urls if urlsplit(url).scheme in ("http", "https") and urlsplit(url).path.rsplit("/", 1)[-1] == entry.filename]
+        if not urls:
+            raise DownloadError("Mageia: официальный сайт не вернул зеркало выбранного ISO.")
+        # The publisher may advertise HTTP mirror URLs; only their HTTPS
+        # equivalent is accepted by our downloader, never a TLS downgrade.
+        url = urls[0].replace("http://", "https://", 1)
+        checksum_url = url + ".sha512"
+        _digest(_metadata(checksum_url), entry.filename, entry.checksum_algorithm, per_image=True)
+        return replace(entry, image_url=url, checksum_url=checksum_url, publisher_page_url="")
     if entry.api_json_url:
         data = json.loads(_metadata(entry.api_json_url))
         url, digest = data.get("url", ""), data.get("sha_sum", "")
