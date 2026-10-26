@@ -21,12 +21,14 @@ class ReleaseTranslationTests(unittest.TestCase):
         self.gh.list_releases.return_value = [copy.deepcopy(self.release)]
         self.gh.release.side_effect = lambda _: copy.deepcopy(self.release)
         self.gh.edit.side_effect = lambda _, **fields: self.release.update(fields)
+        self.gh.api.return_value = {"ref": "refs/tags/v0.3.2"}
 
     def test_only_text_is_modified_and_assets_preserved(self):
         before = copy.deepcopy(self.release)
         with redirect_stdout(io.StringIO()):
             translate(self.gh, self.root)
-        self.assertEqual(set(self.gh.edit.call_args.kwargs), {"name", "body"})
+        self.assertEqual(set(self.gh.edit.call_args.kwargs),
+                         {"name", "body", "tag_name", "target_commitish", "draft", "prerelease"})
         for key in ("assets", "tag_name", "target_commitish", "draft", "prerelease"):
             self.assertEqual(self.release[key], before[key])
         self.assertIn("30 more distributions", self.release["body"])
@@ -47,3 +49,13 @@ class ReleaseTranslationTests(unittest.TestCase):
         with self.assertRaisesRegex(ReleaseError, "No documented"):
             translate(self.gh, self.root)
         self.gh.edit.assert_not_called()
+
+    def test_recovers_only_exact_translated_draft(self):
+        self.release.update(tag_name="untagged-123", draft=True,
+                            name="WinUSB Creator 0.3.2 — Windows, Linux and macOS",
+                            body=(self.root / "docs/releases/v0.3.2.md").read_text())
+        self.gh.list_releases.return_value = [copy.deepcopy(self.release)]
+        with redirect_stdout(io.StringIO()):
+            translate(self.gh, self.root)
+        self.assertEqual(self.release["tag_name"], "v0.3.2")
+        self.assertTrue(self.release["draft"])
