@@ -16,6 +16,29 @@ HOMEBREW_SCRIPT = '''on run argv
 end run'''
 
 
+def installation_panel(parent, description):
+    """Keep optional setup visible without changing the user's native theme."""
+    style = ttk.Style(parent)
+    style.configure("Setup.TButton", font="TkHeadingFont", padding=(16, 9))
+    frame = ttk.LabelFrame(parent, text="Установка дополнительных компонентов", padding=(12, 8))
+    frame.pack(fill="x", padx=15, pady=(8, 10))
+    label = ttk.Label(frame, text=description, wraplength=600, justify="left")
+    label.pack(fill="x", pady=(0, 6))
+    frame.bind("<Configure>", lambda event: label.configure(wraplength=max(180, event.width - 28)))
+    actions = ttk.Frame(frame)
+    actions.pack(fill="x")
+    return actions
+
+
+def add_dependency_button(parent, command):
+    actions = installation_panel(parent,
+        "Если не хватает программ для загрузки или записи: установка через пакетный менеджер системы, с подтверждением.")
+    button = ttk.Button(actions, text="Установить зависимости программы", command=command,
+                        style="Setup.TButton")
+    button.pack(fill="x")
+    return button
+
+
 def installed(system):
     if system == "darwin":
         return any(os.access(p, os.X_OK) and Path(p).is_file()
@@ -43,8 +66,8 @@ def add_buttons(parent, busy=lambda: False, local_aria=None):
     if system not in ("darwin", "win32"):
         return
     name = "Homebrew" if system == "darwin" else "WinGet"
-    frame = ttk.Frame(parent)
-    frame.pack(fill="x", padx=15, pady=6)
+    frame = installation_panel(parent,
+        f"{name} — менеджер пакетов. Установите его, если он нужен для дополнительных компонентов программы.")
 
     def check():
         messagebox.showinfo(name, f"{name} найден." if installed(system) else
@@ -75,5 +98,6 @@ def add_buttons(parent, busy=lambda: False, local_aria=None):
         messagebox.showinfo(name, "Установка открыта. Завершите её в отдельном окне, "
                             "затем нажмите «Проверить» или перезапустите приложение.", parent=parent)
 
-    ttk.Button(frame, text=f"Установить {name}", command=start).pack(side="left")
+    ttk.Button(frame, text=f"Установить {name}", command=start,
+               style="Setup.TButton").pack(side="left", fill="x", expand=True)
     ttk.Button(frame, text="Проверить", command=check).pack(side="left", padx=8)

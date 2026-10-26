@@ -57,6 +57,9 @@ class GNULinuxUSB:
         self.matches = []
         self.destination = None
         self.aria_emulation_allowed = False
+        from package_manager_ui import add_dependency_button
+        if sys.platform.startswith("linux"):
+            self.install_button = add_dependency_button(root, self.install_dependencies)
         if sys.platform in ("win32", "darwin"):
             from package_manager_ui import add_buttons
             add_buttons(root, busy=lambda: self.operation is not None)
@@ -104,8 +107,10 @@ class GNULinuxUSB:
         self.write_button.pack(side="left", padx=8)
         self.cancel_button = ttk.Button(controls, text="Отменить загрузку", command=self.cancel, state="disabled")
         self.cancel_button.pack(side="left")
-        self.install_button = ttk.Button(controls, text="Установить зависимости", command=self.install_dependencies)
-        self.install_button.pack(side="left", padx=8)
+        if not sys.platform.startswith("linux"):
+            self.install_button = ttk.Button(panel, text="Установить зависимости программы",
+                                             command=self.install_dependencies, style="Setup.TButton")
+            self.install_button.pack(fill="x", pady=(8, 0))
         self.log = tk.Text(panel, height=10, state="disabled", wrap="word")
         self.log.pack(fill="both", expand=True, pady=(12, 0))
         self.controls = [self.download_button, self.auto_check, self.local_button, self.image_entry,
