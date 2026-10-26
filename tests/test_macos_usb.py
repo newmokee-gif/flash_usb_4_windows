@@ -34,6 +34,27 @@ def partition_info(**changes):
     return info
 
 
+def native_disk_info(**changes):
+    """macOS 15 diskutil key names observed on both native CI runners."""
+    info = disk_info()
+    for key in ("Whole", "ReadOnlyMedia", "Mounted"):
+        del info[key]
+    info.update(WholeDisk=True, WritableMedia=True, WritableVolume=False, Writable=True)
+    info.update(changes)
+    return info
+
+
+def native_partition_info(**changes):
+    info = partition_info()
+    for key in ("Whole", "ReadOnlyVolume", "Mounted"):
+        del info[key]
+    # An unmounted NTFS volume can be read-only to macOS although the media
+    # is writable; erasing the USB does not require writing that old volume.
+    info.update(WholeDisk=False, WritableMedia=True, WritableVolume=False, Writable=False)
+    info.update(changes)
+    return info
+
+
 def media(name="disk2", entry=100, **changes):
     info = {"BSD Name": name, "Whole": True, "IORegistryEntryID": entry}
     info.update(changes)
@@ -101,6 +122,7 @@ class MacDeviceSafetyTests(unittest.TestCase):
     def test_unknown_child_mount_state_rejected(self):
         part = partition_info()
         del part["Mounted"]
+        del part["MountPoint"]
         self.rejected(parts=[part])
 
     def test_mountpoint_rejected_even_with_false_mounted_flag(self):
@@ -131,6 +153,101 @@ class MacDeviceSafetyTests(unittest.TestCase):
         original = self.device(info=disk_info(MediaUUID="before"))
         repartitioned = self.device(info=disk_info(MediaUUID="after"))
         self.assertEqual(original.identity, repartitioned.identity)
+
+
+class MacNativeSchemaTests(unittest.TestCase):
+    def device(self, disk=None, partition=None):
+        return mac._device_from_info(native_disk_info() if disk is None else disk,
+                                     [native_partition_info() if partition is None else partition],
+                                     {"disk0"}, 100)
+
+    def rejected(self, **kwargs):
+        try:
+            device = self.device(**kwargs)
+        except mac.USBError:
+            return
+        self.assertFalse(device.safe)
+
+    def test_native_whole_disk_and_partition_schema_is_safe(self):
+        device = self.device()
+        self.assertTrue(device.safe, device.reason)
+        self.assertEqual(device.path, "/dev/disk2")
+
+    def test_volume_readonly_does_not_override_writable_media(self):
+        info = native_partition_info(WritableMedia=True, WritableVolume=False, Writable=False)
+        self.assertTrue(mac._media_writable(info))
+        self.assertTrue(self.device(partition=info).safe)
+
+    def test_media_readonly_cannot_be_overridden_by_writable_volume(self):
+        info = native_disk_info(WritableMedia=False, WritableVolume=True, Writable=True)
+        self.assertFalse(mac._media_writable(info))
+        self.rejected(disk=info)
+
+    def test_conflicting_media_aliases_rejected(self):
+        info = native_disk_info(WritableMedia=True, ReadOnlyMedia=True)
+        self.assertFalse(mac._media_writable(info))
+        self.rejected(disk=info)
+
+    def test_conflicting_whole_disk_aliases_rejected(self):
+        self.rejected(disk=native_disk_info(WholeDisk=True, Whole=False))
+
+    def test_missing_whole_disk_metadata_rejected(self):
+        info = native_disk_info()
+        del info["WholeDisk"]
+        self.rejected(disk=info)
+
+    def test_missing_all_writability_metadata_rejected(self):
+        info = native_disk_info()
+        for key in ("WritableMedia", "WritableVolume", "Writable"):
+            del info[key]
+        self.rejected(disk=info)
+
+    def test_nonboolean_native_media_writability_rejected(self):
+        for value in (None, "true", 1):
+            with self.subTest(value=value):
+                self.rejected(disk=native_disk_info(WritableMedia=value))
+
+    def test_mountpoint_only_mounted_volume_is_rejected(self):
+        self.rejected(partition=native_partition_info(MountPoint="/Volumes/USB"))
+
+    def test_absent_mountpoint_is_not_assumed_unmounted(self):
+        info = native_partition_info()
+        del info["MountPoint"]
+        self.rejected(partition=info)
+
+    def test_invalid_native_mountpoint_is_unknown(self):
+        for value in (None, False, 0, "relative/path"):
+            with self.subTest(value=value):
+                self.rejected(partition=native_partition_info(MountPoint=value))
+
+    def test_readonly_volume_on_writable_media_is_recognized(self):
+        self.assertTrue(mac._mount_readonly({"WritableMedia": True, "WritableVolume": False, "Writable": False}))
+
+    def test_writable_volume_is_not_readonly(self):
+        self.assertFalse(mac._mount_readonly({"WritableMedia": False, "WritableVolume": True}, allow_media=True))
+
+    def test_conflicting_readonly_volume_aliases_are_rejected(self):
+        self.assertFalse(mac._mount_readonly({"WritableVolume": False, "ReadOnlyVolume": False}))
+
+    def test_aggregate_writable_flag_does_not_prove_readonly_mount(self):
+        self.assertFalse(mac._mount_readonly({"Writable": False}, allow_media=True))
+
+    def test_native_readonly_source_mount_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = pathlib.Path(directory)
+            response = {"system-entities": [{"dev-entry": "/dev/disk9s1", "mount-point": str(source)}]}
+            info = {"MountPoint": str(source), "WritableMedia": False, "WritableVolume": False, "Writable": False}
+            with mock.patch.object(mac, "_plist", return_value=response), \
+                 mock.patch.object(mac, "_info", return_value=info):
+                self.assertEqual(mac._attach_iso(pathlib.Path("/tmp/input.iso"), source), "/dev/disk9")
+
+    def test_native_readonly_target_mount_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            target = pathlib.Path(directory)
+            info = {"MountPoint": str(target), "WritableMedia": True, "WritableVolume": False, "Writable": False}
+            with mock.patch.object(mac, "_run") as run, mock.patch.object(mac, "_info", return_value=info):
+                mac._mount_partition("/dev/disk2s1", target, read_only=True)
+            self.assertEqual(run.call_args.args[0], ["diskutil", "mount", "readOnly", "-mountPoint", str(target), "/dev/disk2s1"])
 
 
 class MacRegistryAndRootTests(unittest.TestCase):

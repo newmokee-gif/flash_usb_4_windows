@@ -131,22 +131,62 @@ def _root_disks(root_info, apfs):
     return protected
 
 
+def _coherent_boolean(info, positive, negative=()):
+    """Read explicit booleans, rejecting conflicting aliases and unknown data."""
+    values = []
+    for name in (*positive, *negative):
+        if name not in info:
+            continue
+        value = info[name]
+        if type(value) is not bool:
+            return None
+        values.append(value if name in positive else not value)
+    if not values or any(value != values[0] for value in values):
+        return None
+    return values[0]
+
+
+def _whole_disk(info):
+    # WholeDisk is diskutil's macOS 15 spelling; Whole is the IOMedia/legacy
+    # spelling. Never accept conflicting values if both are supplied.
+    return _coherent_boolean(info, ("WholeDisk", "Whole"))
+
+
+def _mount_state(info):
+    # Current diskutil omits Mounted; MountPoint is present and empty when
+    # unmounted. Absence is not equivalent to an empty, known mountpoint.
+    has_point = "MountPoint" in info
+    point = info.get("MountPoint")
+    if has_point and (not isinstance(point, str) or (point and not point.startswith("/"))):
+        return None
+    if "Mounted" in info:
+        mounted = info["Mounted"]
+        if type(mounted) is not bool:
+            return None
+        if has_point and mounted != bool(point):
+            return None
+        if mounted and not has_point:
+            return None
+        return mounted
+    return bool(point) if has_point else None
+
+
 def _media_writable(info):
-    known = []
-    for key in ("ReadOnlyMedia", "MediaReadOnly", "Writable"):
-        if key in info:
-            value = info[key]
-            if type(value) is not bool:
-                return False
-            known.append(value if key == "Writable" else not value)
-    return bool(known) and all(known)
+    specific = ("WritableMedia", "ReadOnlyMedia", "MediaReadOnly")
+    if any(key in info for key in specific):
+        # Aggregate Writable includes filesystem/snapshot permissions. A
+        # read-only APFS volume can sit on writable media; don't conflate them.
+        return _coherent_boolean(info, ("WritableMedia",), ("ReadOnlyMedia", "MediaReadOnly")) is True
+    return _coherent_boolean(info, ("Writable",)) is True
 
 
 def _mount_readonly(info, allow_media=False):
-    values = [info[key] for key in ("ReadOnlyVolume", "VolumeReadOnly") if key in info]
-    if not values and allow_media:
-        values = [info[key] for key in ("ReadOnlyMedia", "MediaReadOnly") if key in info]
-    return bool(values) and all(type(value) is bool and value for value in values)
+    volume_keys = ("WritableVolume", "ReadOnlyVolume", "VolumeReadOnly")
+    if any(key in info for key in volume_keys):
+        return _coherent_boolean(info, ("ReadOnlyVolume", "VolumeReadOnly"), ("WritableVolume",)) is True
+    if allow_media:
+        return _coherent_boolean(info, ("ReadOnlyMedia", "MediaReadOnly"), ("WritableMedia",)) is True
+    return False
 
 
 def _device_from_info(info, parts, root_disks, registry_id):
@@ -164,7 +204,7 @@ def _device_from_info(info, parts, root_disks, registry_id):
             raise ValueError("unknown disk topology or root disk")
         reason = ""
         mounts = []
-        if info.get("Whole") is not True or info.get("Internal") is not False:
+        if _whole_disk(info) is not True or info.get("Internal") is not False:
             reason = "Only whole external disks are supported"
         elif info.get("VirtualOrPhysical") != "Physical" or info.get("BusProtocol") != "USB":
             reason = "Only physical USB disks are supported"
@@ -189,11 +229,11 @@ def _device_from_info(info, parts, root_disks, registry_id):
             if node is not info:
                 part_name = node.get("DeviceIdentifier")
                 part_parent = node.get("ParentWholeDisk") or node.get("PartOfWhole")
-                if _whole(part_name) != name or part_parent != name or node.get("Whole") is not False:
+                if _whole(part_name) != name or part_parent != name or _whole_disk(node) is not False:
                     raise ValueError("partition parent is unverifiable")
-                if any(key in node for key in ("ReadOnlyMedia", "MediaReadOnly", "Writable")) and not _media_writable(node):
+                if any(key in node for key in ("WritableMedia", "ReadOnlyMedia", "MediaReadOnly", "Writable")) and not _media_writable(node):
                     reason = "Read-only or unknown partition state"
-                if type(node.get("Mounted")) is not bool:
+                if _mount_state(node) is None:
                     reason = "Unknown partition mount state"
                 if node.get("Content") not in {"Apple_HFS", "Apple_HFSX", "EFI", "Microsoft Basic Data",
                                                "DOS_FAT_12", "DOS_FAT_16", "DOS_FAT_16B", "DOS_FAT_32",
@@ -204,8 +244,8 @@ def _device_from_info(info, parts, root_disks, registry_id):
                 if not isinstance(point, str) or not point.startswith("/"):
                     raise ValueError("invalid mountpoint")
                 mounts.append(point)
-            if node.get("Mounted") is True and not point:
-                reason = "Mounted volume has no known mountpoint"
+            if _mount_state(node) is None:
+                reason = "Unknown or inconsistent volume mount state"
         if mounts and not reason:
             reason = "Mounted partitions; unmount the USB first"
         identity = (name, size, info.get("MediaName", ""), info.get("DeviceTreePath", ""), registry_id)
@@ -228,6 +268,9 @@ def _snapshot():
         if _whole(name) != name:
             raise USBError("Expected whole physical disk")
         info = _info("/dev/" + name)
+        if (_whole_disk(info) is not False
+                or (info.get("ParentWholeDisk") or info.get("PartOfWhole")) != Path(device).name):
+            raise ValueError("formatted partition parent could not be confirmed")
         # Internal disks never appear as selectable GUI targets.
         if info.get("Internal") is True or info.get("BusProtocol") != "USB":
             continue
@@ -375,7 +418,7 @@ def _mount_partition(partition, target, read_only=False):
     _run([*args, "-mountPoint", str(target), partition])
     try:
         info = _info(partition)
-        if info.get("Mounted") is not True or Path(info.get("MountPoint", "")).resolve() != target.resolve():
+        if _mount_state(info) is not True or Path(info.get("MountPoint", "")).resolve() != target.resolve():
             raise USBError("Partition was not mounted at the private working directory")
         if read_only and not _mount_readonly(info):
             raise USBError("Readback mount is not read-only")
