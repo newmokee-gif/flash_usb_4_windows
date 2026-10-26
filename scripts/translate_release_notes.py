@@ -1,5 +1,6 @@
 """Update documented release titles/bodies only; never touch assets or visibility."""
 from pathlib import Path
+import json
 import re
 import subprocess
 from consolidate_release import GitHub, require
@@ -54,7 +55,8 @@ def translate(gh, root):
         print(f"::notice::English release notes verified: {tag}")
     for release in releases:
         if release["id"] not in {plan[0]["id"] for plan in plans}:
-            print(f"::notice::Unmapped historical release retained unchanged: {release['tag_name']}")
+            metadata = json.dumps({key: release.get(key) for key in ("tag_name", "name", "body")}, ensure_ascii=False)
+            print("::notice::Historical notes for translation: " + metadata.replace("%", "%25"))
 
 
 if __name__ == "__main__":
