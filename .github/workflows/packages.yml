@@ -1,0 +1,126 @@
+name: Native Linux packages
+
+on:
+  push:
+    branches: [linux-support]
+    tags: ['packages-v*-linux*']
+    paths:
+      - packaging/**
+      - tests/smoke_installed_package.py
+      - .github/workflows/packages.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - format: deb
+            image: debian:stable-slim
+          - format: rpm
+            image: fedora:latest
+    name: Build and install ${{ matrix.format }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, install, exercise and uninstall
+        env:
+          IMAGE: ${{ matrix.image }}
+          FORMAT: ${{ matrix.format }}
+        run: |
+          mkdir -p packages
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          set +e
+          docker run --rm -v "$PWD:/src:ro" -v "$PWD/packages:/out" -w /src -e FORMAT -e SOURCE_DATE_EPOCH "$IMAGE" sh -eu -c '
+            if [ "$FORMAT" = deb ]; then
+              apt-get update
+              DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 dpkg-dev
+            else
+              dnf install -y python3 rpm-build
+            fi
+            python3 packaging/build.py "$FORMAT" --output /out
+            if [ "$FORMAT" = deb ]; then
+              DEBIAN_FRONTEND=noninteractive apt-get install -y /out/*.deb xvfb desktop-file-utils
+              dpkg-query -W flash-usb
+              dpkg-deb --info /out/*.deb
+            else
+              dnf install -y /out/*.rpm xorg-x11-server-Xvfb desktop-file-utils
+              rpm -qi flash-usb
+              rpm -V flash-usb
+            fi
+            desktop-file-validate /usr/share/applications/flash-usb.desktop
+            PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
+            Xvfb :99 -screen 0 1024x768x24 -nolisten tcp &
+            xvfb_pid=$!
+            trap "kill $xvfb_pid" EXIT
+            export DISPLAY=:99 PYTHONDONTWRITEBYTECODE=1
+            python3 tests/smoke_installed_package.py
+            if [ "$FORMAT" = deb ]; then
+              apt-get remove -y flash-usb
+            else
+              dnf remove -y flash-usb
+            fi
+            test ! -e /usr/bin/flash-usb
+            test ! -e /usr/share/applications/flash-usb.desktop
+          ' 2>&1 | tee package-check.log
+          result=${PIPESTATUS[0]}
+          set -e
+          if [ "$result" -ne 0 ]; then
+            python3 -c 'from pathlib import Path; text="\n".join(Path("package-check.log").read_text(errors="replace").splitlines()[-70:]); print("::error::" + text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A"))'
+          fi
+          exit "$result"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.format }}
+          path: packages/*.${{ matrix.format }}
+          if-no-files-found: error
+
+  publish:
+    if: startsWith(github.ref, 'refs/tags/packages-')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: native-*
+          merge-multiple: true
+          path: packages
+      - name: Add verified packages to the existing release
+        working-directory: packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          release="${GITHUB_REF_NAME#packages-}"
+          gh release view "$release"
+          sha256sum *.deb *.rpm > SHA256SUMS-packages.txt
+          gh release upload "$release" *.deb *.rpm SHA256SUMS-packages.txt
+          gh release view "$release" --json body --jq .body > release-notes.md
+          python3 - <<'PY'
+          from pathlib import Path
+          notes = Path('release-notes.md')
+          addition = '''
+
+          ## Ready-to-install Linux packages
+
+          Debian: `sudo apt install ./flash-usb_0.2.0~linux.2_all.deb`
+
+          Fedora: `sudo dnf install ./flash-usb-0.2.0-0.2.linux.noarch.rpm`
+
+          Start **WinUSB Creator** from the application menu or run `flash-usb`.
+          Dependencies are installed by the package manager; no manual build or pip is needed.
+          These are architecture-independent packages of the Python application.
+          Both packages passed installation, CLI/GUI startup as an unprivileged user,
+          and uninstall checks in Debian/Fedora containers. Checksums: `SHA256SUMS-packages.txt`.
+          Physical USB/UEFI boot remains untested; this release remains a prerelease.
+          '''
+          notes.write_text(notes.read_text() + addition)
+          PY
+          gh release edit "$release" --notes-file release-notes.md

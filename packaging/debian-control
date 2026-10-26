@@ -1,0 +1,13 @@
+Package: flash-usb
+Version: @VERSION@
+Section: utils
+Priority: optional
+Architecture: all
+Maintainer: flash_usb_4_windows contributors <noreply@github.com>
+Installed-Size: @SIZE@
+Depends: python3 (>= 3.10), python3-tk, util-linux, mount, parted, dosfstools, wimtools, udev, pkexec, fonts-dejavu-core
+Homepage: https://github.com/newmokee-gif/flash_usb_4_windows
+Description: Create Windows UEFI USB installers on Linux
+ Graphical and command-line Windows ISO writer for USB drives using FAT32,
+ wimlib splitting, device safety checks and readback verification.
+ Writing erases the selected USB disk and requires administrator privileges.
