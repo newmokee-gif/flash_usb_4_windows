@@ -11,36 +11,50 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 from linux_usb import USBError, check_dependencies, list_devices, subprocess_environment
+from app_icon import set_app_icon
 
 
 class LinuxUSB:
     def __init__(self, root):
         self.root = root
+        set_app_icon(root)
+        from ui_design import theme, header, section, log_style, scroll_body
+        theme(root)
         self.busy = False
         self.events = queue.Queue()
         self.devices = []
         root.title("WinUSB Creator — Linux / UEFI")
-        root.geometry("800x560")
+        root.geometry("900x760")
+        root.minsize(800, 700)
         root.protocol("WM_DELETE_WINDOW", self.close)
-        panel = ttk.Frame(root, padding=16)
-        panel.pack(fill="both", expand=True)
-        ttk.Label(panel, text="Windows ISO → USB (UEFI, FAT32)", font=("sans", 16)).pack(anchor="w")
-        ttk.Label(panel, text="All data on the selected USB drive will be erased. Legacy BIOS is not supported.").pack(anchor="w", pady=8)
+        header(root, "Create a Windows USB", "Local Windows ISO → UEFI installation media. Large WIM files are split automatically.")
+        self.add_setup_components()
+        panel = scroll_body(root)
+        source = section(panel, "01  CHOOSE AN IMAGE")
         self.iso = tk.StringVar()
-        self.entry = ttk.Entry(panel, textvariable=self.iso)
+        self.entry = ttk.Entry(source, textvariable=self.iso)
         self.entry.pack(fill="x")
-        self.browse = ttk.Button(panel, text="Select ISO…", command=self.choose_iso)
+        self.browse = ttk.Button(source, text="Select ISO…", command=self.choose_iso)
         self.browse.pack(anchor="w", pady=8)
-        self.combo = ttk.Combobox(panel, state="readonly")
+        target = section(panel, "02  TARGET USB")
+        self.combo = ttk.Combobox(target, state="readonly")
         self.combo.pack(fill="x")
-        self.refresh_button = ttk.Button(panel, text="Refresh USB", command=self.refresh)
+        self.refresh_button = ttk.Button(target, text="Refresh USB", command=self.refresh)
         self.refresh_button.pack(anchor="w", pady=8)
-        self.write_button = ttk.Button(panel, text="Write and verify", command=self.write)
-        self.write_button.pack(anchor="w")
-        self.log = tk.Text(panel, height=15, state="disabled", wrap="word")
-        self.log.pack(fill="both", expand=True, pady=12)
+        ttk.Label(target, text="All data on this USB will be erased. Legacy BIOS is not supported.", wraplength=700).pack(anchor="w", pady=5)
+        self.write_button = ttk.Button(target, text="Write and verify", style="Danger.TButton", command=self.write)
+        self.write_button.pack(fill="x")
+        ttk.Label(panel, text="ACTIVITY", style="Muted.TLabel").pack(anchor="w", pady=(0, 6))
+        log_panel = ttk.Frame(panel)
+        log_panel.pack(fill="both", expand=True)
+        self.log = tk.Text(log_panel, height=6, state="disabled", wrap="word")
+        log_style(self.log)
+        self.log.pack(side="left", fill="both", expand=True)
         self.refresh()
         root.after(100, self.poll)
+
+    def add_setup_components(self):
+        """Platform-specific optional setup, placed consistently below the header."""
 
     def append(self, text):
         self.log.configure(state="normal")

@@ -48,6 +48,10 @@ def elevated_command(command):
 
 class GNULinuxUSB:
     def __init__(self, root):
+        from app_icon import set_app_icon
+        set_app_icon(root)
+        from ui_design import theme, header, section, log_style, scroll_body
+        theme(root)
         self.root = root
         self.events = queue.Queue()
         self.cancelled = threading.Event()
@@ -57,6 +61,7 @@ class GNULinuxUSB:
         self.matches = []
         self.destination = None
         self.aria_emulation_allowed = False
+        header(root, "Create a GNU/Linux USB", "Official sources. Verified images. Byte-for-byte USB writing.")
         from package_manager_ui import add_dependency_button
         if sys.platform.startswith("linux"):
             self.install_button = add_dependency_button(root, self.install_dependencies)
@@ -64,15 +69,12 @@ class GNULinuxUSB:
             from package_manager_ui import add_buttons
             add_buttons(root, busy=lambda: self.operation is not None)
         root.title("WinUSB Creator — GNU/Linux")
-        root.geometry("900x760")
-        root.minsize(740, 650)
+        root.geometry("940x860")
+        root.minsize(800, 680)
         root.protocol("WM_DELETE_WINDOW", self.close)
-        panel = ttk.Frame(root, padding=16)
-        panel.pack(fill="both", expand=True)
-        ttk.Label(panel, text="GNU/Linux → USB", font=("sans", 17)).pack(anchor="w")
-        ttk.Label(panel, text="Raw hybrid ISO/IMG writing. All data on the selected USB drive will be erased.",
-                  wraplength=840).pack(anchor="w", pady=(4, 12))
-        form = ttk.Frame(panel)
+        panel = scroll_body(root)
+        source = section(panel, "01  CHOOSE A DISTRIBUTION")
+        form = ttk.Frame(source)
         form.pack(fill="x")
         form.columnconfigure(1, weight=1)
         self.distro = ttk.Combobox(form, state="readonly", values=sorted({value(i, "distro") for i in self.images}))
@@ -83,27 +85,30 @@ class GNULinuxUSB:
             widget.grid(row=row, column=1, sticky="ew", pady=4)
         self.distro.bind("<<ComboboxSelected>>", self.select_distro)
         self.arch.bind("<<ComboboxSelected>>", self.select_arch)
-        self.download_button = ttk.Button(panel, text="Download and verify image", command=self.download)
+        self.download_button = ttk.Button(source, text="Download and verify image", style="Primary.TButton", command=self.download)
         self.download_button.pack(anchor="w", pady=8)
         self.auto_write = tk.BooleanVar(value=False)
-        self.auto_check = ttk.Checkbutton(panel, text="Offer to write after downloading (requires USB confirmation)", variable=self.auto_write)
+        self.auto_check = ttk.Checkbutton(source, text="Offer to write after downloading (requires USB confirmation)", variable=self.auto_write)
         self.auto_check.pack(anchor="w")
         self.image_path = tk.StringVar()
         self.sha256 = tk.StringVar()
-        self.image_entry = ttk.Entry(panel, textvariable=self.image_path)
+        image = section(panel, "02  VERIFY YOUR IMAGE")
+        self.image_entry = ttk.Entry(image, textvariable=self.image_path)
         self.image_entry.pack(fill="x", pady=(12, 4))
-        self.local_button = ttk.Button(panel, text="Select local ISO / IMG…", command=self.choose_local)
+        self.local_button = ttk.Button(image, text="Select local ISO / IMG…", command=self.choose_local)
         self.local_button.pack(anchor="w")
-        ttk.Label(panel, text="Expected SHA-256 from the official source (filled automatically after download):").pack(anchor="w", pady=(8, 2))
-        self.hash_entry = ttk.Entry(panel, textvariable=self.sha256)
+        ttk.Label(image, text="Official SHA-256 • Filled automatically for downloaded images", style="Muted.TLabel").pack(anchor="w", pady=(8, 2))
+        self.hash_entry = ttk.Entry(image, textvariable=self.sha256)
         self.hash_entry.pack(fill="x")
-        self.usb = ttk.Combobox(panel, state="readonly")
+        target = section(panel, "03  TARGET USB & WRITE")
+        ttk.Label(target, text="All data on the selected USB will be erased. You must confirm the exact device path.", wraplength=780).pack(anchor="w")
+        self.usb = ttk.Combobox(target, state="readonly")
         self.usb.pack(fill="x", pady=(12, 4))
-        controls = ttk.Frame(panel)
+        controls = ttk.Frame(target)
         controls.pack(fill="x")
         self.refresh_button = ttk.Button(controls, text="Refresh USB", command=self.refresh)
         self.refresh_button.pack(side="left")
-        self.write_button = ttk.Button(controls, text="Write and verify USB", command=self.write)
+        self.write_button = ttk.Button(controls, text="Write and verify USB", style="Danger.TButton", command=self.write)
         self.write_button.pack(side="left", padx=8)
         self.cancel_button = ttk.Button(controls, text="Cancel download", command=self.cancel, state="disabled")
         self.cancel_button.pack(side="left")
@@ -111,8 +116,11 @@ class GNULinuxUSB:
             self.install_button = ttk.Button(panel, text="Install application dependencies",
                                              command=self.install_dependencies, style="Setup.TButton")
             self.install_button.pack(fill="x", pady=(8, 0))
-        self.log = tk.Text(panel, height=10, state="disabled", wrap="word")
-        self.log.pack(fill="both", expand=True, pady=(12, 0))
+        log_panel = ttk.Frame(panel)
+        log_panel.pack(fill="both", expand=True, pady=(8, 0))
+        self.log = tk.Text(log_panel, height=4, state="disabled", wrap="word")
+        log_style(self.log)
+        self.log.pack(side="left", fill="both", expand=True)
         self.controls = [self.download_button, self.auto_check, self.local_button, self.image_entry,
                          self.hash_entry, self.refresh_button, self.write_button, self.install_button]
         if self.distro["values"]:

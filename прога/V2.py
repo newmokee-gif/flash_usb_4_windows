@@ -237,14 +237,8 @@ class WindowsOneClickUSB:
         self.root.title("Windows 10/11 — One-Click USB Creator (PRO Fixed)")
         self.root.geometry("620x660")
         self.root.resizable(False, False)
-        # --- ICON_START ---
-        try:
-            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("oploic.winusb.creator.pro.2")
-            self._app_icon_img = tk.PhotoImage(data="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")
-            self.root.iconphoto(True, self._app_icon_img)
-        except Exception as e:
-            pass
-        # --- ICON_END ---
+        from app_icon import set_app_icon
+        set_app_icon(self.root)
 
         self.is_closing = False
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
@@ -291,174 +285,8 @@ class WindowsOneClickUSB:
         self.root.destroy()
 
     def build_ui(self):
-        add_buttons(self.root, busy=lambda: self.is_busy,
-                    local_aria=os.path.join(self.tools_dir, "aria2c.exe"))
-        pad = {"padx": 15, "pady": 4}
-
-        folder_frame = tk.Frame(self.root, bg="#e9f5ff")
-        folder_frame.pack(fill="x", padx=15, pady=(10, 2))
-        tk.Label(
-            folder_frame,
-            text=f"📁 ISO download folder: {self.work_dir}",
-            bg="#e9f5ff",
-            fg="#004085",
-            font=("Segoe UI", 9, "bold"),
-        ).pack(anchor="w", padx=8, pady=4)
-
-        tk.Label(
-            self.root,
-            text="1. Select the target USB drive (8 to 128 GB):",
-            font=("Segoe UI", 10, "bold"),
-        ).pack(anchor="w", padx=15, pady=(8, 2))
-        usb_frame = tk.Frame(self.root)
-        usb_frame.pack(fill="x", **pad)
-
-        self.drive_combo = ttk.Combobox(
-            usb_frame,
-            textvariable=self.selected_drive,
-            state="readonly",
-            font=("Segoe UI", 9),
-        )
-        self.drive_combo.pack(
-            side="left", fill="x", expand=True, padx=(0, 5), ipady=2
-        )
-
-        self.test_usb_btn = tk.Button(
-            usb_frame,
-            text="🔍 Test sectors",
-            width=14,
-            bg="#f0ad4e",
-            fg="white",
-            font=("Segoe UI", 8, "bold"),
-            relief="flat",
-            command=self.start_standalone_usb_check,
-        )
-        self.test_usb_btn.pack(side="left", padx=(0, 5), ipady=2)
-
-        self.refresh_btn = tk.Button(
-            usb_frame, text="Refresh", width=10, command=self.refresh_drives
-        )
-        self.refresh_btn.pack(side="right")
-
-        chk_usb_frame = tk.Frame(self.root)
-        chk_usb_frame.pack(fill="x", padx=15, pady=(0, 2))
-        tk.Checkbutton(
-            chk_usb_frame,
-            text="Check the USB drive for errors and bad sectors before writing",
-            variable=self.check_usb_var,
-            font=("Segoe UI", 9),
-            fg="#333333",
-        ).pack(anchor="w")
-
-        tk.Label(
-            self.root,
-            text="2. Download Windows image (background aria2 client):",
-            font=("Segoe UI", 10, "bold"),
-        ).pack(anchor="w", padx=15, pady=(6, 2))
-
-        chk_frame = tk.Frame(self.root)
-        chk_frame.pack(fill="x", padx=15, pady=(0, 2))
-        tk.Checkbutton(
-            chk_frame,
-            text="Automatically write Windows to USB after downloading",
-            variable=self.auto_write_var,
-            font=("Segoe UI", 9, "bold"),
-            fg="#0056b3",
-        ).pack(anchor="w")
-
-        ver_frame = tk.Frame(self.root)
-        ver_frame.pack(fill="x", **pad)
-        self.ver_combo = ttk.Combobox(
-            ver_frame,
-            textvariable=self.win_version,
-            state="readonly",
-            font=("Segoe UI", 9),
-            width=26,
-            values=list(WINDOWS_ISO_CHOICES),
-        )
-        self.ver_combo.pack(side="left", padx=(0, 5), ipady=3)
-
-        self.dl_auto_btn = tk.Button(
-            ver_frame,
-            text="🚀 Download and write Windows",
-            bg="#0078D7",
-            fg="white",
-            font=("Segoe UI", 9, "bold"),
-            relief="flat",
-            command=self.start_auto_windows_pipeline,
-        )
-        self.dl_auto_btn.pack(side="left", fill="x", expand=True, ipady=4)
-
-        tor_frame = tk.Frame(self.root)
-        tor_frame.pack(fill="x", **pad)
-        tk.Label(
-            tor_frame, text="Torrent / Magnet / URL:", font=("Segoe UI", 8)
-        ).pack(side="left", padx=(0, 5))
-        tk.Entry(
-            tor_frame, textvariable=self.torrent_source, font=("Segoe UI", 8)
-        ).pack(side="left", fill="x", expand=True, padx=(0, 5))
-        self.dl_custom_btn = tk.Button(
-            tor_frame,
-            text="Select .torrent",
-            font=("Segoe UI", 8),
-            command=self.browse_torrent,
-        )
-        self.dl_custom_btn.pack(side="left", padx=(0, 4))
-        self.dl_mag_btn = tk.Button(
-            tor_frame,
-            text="Download from URL",
-            font=("Segoe UI", 8),
-            command=self.start_custom_pipeline,
-        )
-        self.dl_mag_btn.pack(side="right")
-
-        tk.Label(
-            self.root,
-            text="3. Windows ISO image (detected automatically or selected manually):",
-            font=("Segoe UI", 10, "bold"),
-        ).pack(anchor="w", padx=15, pady=(8, 2))
-        iso_frame = tk.Frame(self.root)
-        iso_frame.pack(fill="x", **pad)
-
-        tk.Entry(
-            iso_frame,
-            textvariable=self.iso_path,
-            state="readonly",
-            font=("Segoe UI", 9),
-        ).pack(side="left", fill="x", expand=True, padx=(0, 5), ipady=3)
-        self.browse_iso_btn = tk.Button(
-            iso_frame, text="Browse ISO...", width=12, command=self.browse_iso
-        )
-        self.browse_iso_btn.pack(side="right")
-
-        tk.Label(
-            self.root,
-            text="4. Operation status:",
-            font=("Segoe UI", 10, "bold"),
-        ).pack(anchor="w", padx=15, pady=(8, 2))
-        self.progress = ttk.Progressbar(
-            self.root, orient="horizontal", mode="determinate"
-        )
-        self.progress.pack(fill="x", padx=15, pady=5, ipady=3)
-
-        self.status_label = tk.Label(
-            self.root,
-            text="Ready. Select a USB drive and start the operation.",
-            fg="#555555",
-            font=("Segoe UI", 9),
-        )
-        self.status_label.pack(pady=2)
-
-        self.write_btn = tk.Button(
-            self.root,
-            text="⚡ WRITE SELECTED WINDOWS ISO TO USB",
-            bg="#d9534f",
-            fg="white",
-            font=("Segoe UI", 10, "bold"),
-            relief="flat",
-            command=self.start_manual_write,
-        )
-        self.write_btn.pack(fill="x", padx=15, pady=10, ipady=5)
+        from ui_design import build_windows_ui
+        build_windows_ui(self, WINDOWS_ISO_CHOICES)
 
     def set_progress(self, val):
         self.ui_call(self.progress.config, value=max(0.0, min(100.0, float(val))))
@@ -1350,10 +1178,10 @@ class WindowsOneClickUSB:
         self.ui_call(
             lambda: (
                 self.dl_auto_btn.config(
-                    state=state, bg="#999999" if busy else "#0078D7"
+                    state=state
                 ),
                 self.test_usb_btn.config(
-                    state=state, bg="#999999" if busy else "#f0ad4e"
+                    state=state
                 ),
                 self.dl_custom_btn.config(state=state),
                 self.dl_mag_btn.config(state=state),
@@ -1362,7 +1190,7 @@ class WindowsOneClickUSB:
                 self.drive_combo.config(state=combo_state),
                 self.ver_combo.config(state=combo_state),
                 self.write_btn.config(
-                    state=state, bg="#999999" if busy else "#d9534f"
+                    state=state
                 ),
             )
         )

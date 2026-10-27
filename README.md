@@ -4,6 +4,10 @@ Runs on Windows x64/ARM64, Linux x64/ARM64 and macOS Intel/Apple Silicon. At sta
 
 ## Ready-to-run applications
 
+Version 0.3.4 introduces a redesigned chooser and installation screens, numbered
+steps, scrollable forms and a shared blue USB icon. Download and write safeguards
+are unchanged; confirm the target drive before erasing it.
+
 Download the appropriate file from the [latest release](https://github.com/newmokee-gif/flash_usb_4_windows/releases/latest).
 
 | Computer | File |
@@ -12,14 +16,14 @@ Download the appropriate file from the [latest release](https://github.com/newmo
 | Windows 11 ARM64 | `WinUSB-Creator-Windows-ARM64.exe` |
 | macOS 15+ Apple Silicon | `WinUSB-Creator-macOS-AppleSilicon.dmg` |
 | macOS 15+ Intel | `WinUSB-Creator-macOS-Intel.dmg` |
-| Debian x64/ARM64 | `flash-usb_0.3.3_all.deb` |
-| Fedora x64/ARM64 | `flash-usb-0.3.3-1.noarch.rpm` |
-| Debian/Fedora/Arch x64 | `flash-usb-v0.3.3-x86_64.AppImage` |
-| Debian/Fedora ARM64 | `flash-usb-v0.3.3-aarch64.AppImage` |
+| Debian x64/ARM64 | `flash-usb_0.3.4_all.deb` |
+| Fedora x64/ARM64 | `flash-usb-0.3.4-1.noarch.rpm` |
+| Debian/Fedora/Arch x64 | `flash-usb-v0.3.4-x86_64.AppImage` |
+| Debian/Fedora ARM64 | `flash-usb-v0.3.4-aarch64.AppImage` |
 
 The Windows EXE is standalone; no separate `_internal` folder is required. On Mac, open the DMG and drag the application into Applications. AppImage includes Python/Tk and requires glibc 2.36+ and a graphical session. Make it executable; if FUSE is unavailable, use `--appimage-extract-and-run`.
 
-Install DEB/RPM with `sudo apt install ./flash-usb_0.3.3_all.deb` or `sudo dnf install ./flash-usb-0.3.3-1.noarch.rpm`. The package manager installs dependencies, including aria2. These packages use system Python.
+Install DEB/RPM with `sudo apt install ./flash-usb_0.3.4_all.deb` or `sudo dnf install ./flash-usb-0.3.4-1.noarch.rpm`. The package manager installs dependencies, including aria2. These packages use system Python.
 
 File checksums are in `SHA256SUMS.txt`; build provenance is in `RELEASE-PROVENANCE.json`. Source code is available at the release tag. GitHub automatically adds Source code ZIP/tar.gz links; those archives are not needed to run the application.
 

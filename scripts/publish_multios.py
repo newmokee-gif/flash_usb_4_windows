@@ -7,12 +7,12 @@ import subprocess
 from consolidate_release import GitHub, require, sha256, verify_manifest, verify_new_release
 
 
-TAG = "v0.3.3"
+TAG = "v0.3.4"
 EXPECTED = {
     "WinUSB-Creator-Windows-x64.exe", "WinUSB-Creator-Windows-ARM64.exe",
     "WinUSB-Creator-macOS-Intel.dmg", "WinUSB-Creator-macOS-AppleSilicon.dmg",
-    "flash-usb-v0.3.3-x86_64.AppImage", "flash-usb-v0.3.3-aarch64.AppImage",
-    "flash-usb_0.3.3_all.deb", "flash-usb-0.3.3-1.noarch.rpm",
+    "flash-usb-v0.3.4-x86_64.AppImage", "flash-usb-v0.3.4-aarch64.AppImage",
+    "flash-usb_0.3.4_all.deb", "flash-usb-0.3.4-1.noarch.rpm",
 }
 DESKTOP_MANIFESTS = {
     "SHA256SUMS-Windows-x64.txt": "WinUSB-Creator-Windows-x64.exe",
@@ -61,12 +61,12 @@ def main():
     releases = gh.list_releases()
     require(not any(r["tag_name"] == TAG for r in releases), "Destination already exists")
     public = [r for r in releases if not r["draft"]]
-    require(len(public) == 1 and public[0]["tag_name"] == "v0.3.2", "Unexpected public releases")
+    require(len(public) == 1 and public[0]["tag_name"] == "v0.3.3", "Unexpected public releases")
     old = public[0]
     require(not old.get("immutable"), "Previous release is immutable")
     builds = root / "desktop-dist"
     verified_hashes = validate_inputs(builds)
-    output = root / "release-v0.3.3"
+    output = root / "release-v0.3.4"
     output.mkdir()
     for p in builds.iterdir():
         require(p.is_file() and not p.is_symlink(), "Unsafe artifact")
@@ -80,14 +80,14 @@ def main():
                   "previous_release": {"id": old["id"], "tag": old["tag_name"]}}
     (output / "RELEASE-PROVENANCE.json").write_text(json.dumps(provenance, indent=2), encoding="utf-8")
     (output / "SHA256SUMS.txt").write_text("".join(f"{sha256(p)}  {p.name}\n" for p in sorted(output.iterdir())), encoding="utf-8")
-    notes = (root / "docs/releases/v0.3.3.md").read_text(encoding="utf-8")
+    notes = (root / "docs/releases/v0.3.4.md").read_text(encoding="utf-8")
     # The tag already exists and was verified above. Do not request a target
     # commit update: GitHub may require workflow-write permission for that.
     new = gh.api("releases", "POST", {"tag_name": TAG,
-        "name": "WinUSB Creator 0.3.3 — Windows and GNU/Linux", "body": notes,
+        "name": "WinUSB Creator 0.3.4 — Windows and GNU/Linux", "body": notes,
         "draft": True, "prerelease": False})
     gh.upload(TAG, sorted(output.iterdir()))
-    verify_new_release(gh, new["id"], TAG, output, root / "verify-v0.3.3")
+    verify_new_release(gh, new["id"], TAG, output, root / "verify-v0.3.4")
     gh.edit(new["id"], tag_name=TAG, draft=False, prerelease=False, make_latest="true")
     require(gh.api("releases/latest")["id"] == new["id"], "Publication is not Latest")
     gh.edit(old["id"], tag_name=old["tag_name"], draft=True, prerelease=old["prerelease"])

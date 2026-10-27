@@ -2,6 +2,7 @@
 import sys
 import tkinter as tk
 from tkinter import ttk
+from app_icon import set_app_icon
 
 
 def open_mode(root, mode):
@@ -27,16 +28,25 @@ def open_mode(root, mode):
 class OSChooser:
     def __init__(self, root):
         self.root = root
+        set_app_icon(root)
+        from ui_design import theme, header, section
+        theme(root)
         root.title("WinUSB Creator — Select operating system")
-        root.geometry("460x230")
-        root.resizable(False, False)
-        panel = ttk.Frame(root, padding=24)
+        root.geometry("720x470")
+        root.minsize(640, 440)
+        root.resizable(True, True)
+        header(root, "What would you like to install?", "Create installation media for another computer. Start by choosing its operating system.")
+        panel = ttk.Frame(root, padding=(20, 12, 20, 20))
         panel.pack(fill="both", expand=True)
-        ttk.Label(panel, text="What would you like to install?", font=("sans", 18)).pack(pady=(10, 24))
-        self.windows_button = ttk.Button(panel, text="Windows", command=lambda: open_mode(root, "windows"))
-        self.windows_button.pack(fill="x", pady=4)
-        self.linux_button = ttk.Button(panel, text="GNU/Linux", command=lambda: open_mode(root, "gnu-linux"))
-        self.linux_button.pack(fill="x", pady=4)
+        windows = section(panel, "WINDOWS INSTALLATION")
+        ttk.Label(windows, text="Windows 10 / 11 • Local ISO or supported download", style="Muted.TLabel").pack(anchor="w", pady=(0, 8))
+        self.windows_button = ttk.Button(windows, text="Windows", style="Primary.TButton", command=lambda: open_mode(root, "windows"))
+        self.windows_button.pack(fill="x")
+        linux = section(panel, "LINUX INSTALLATION")
+        ttk.Label(linux, text="Distribution catalogue • Official downloads • Verified raw writing", style="Muted.TLabel").pack(anchor="w", pady=(0, 8))
+        self.linux_button = ttk.Button(linux, text="GNU/Linux", style="Primary.TButton", command=lambda: open_mode(root, "gnu-linux"))
+        self.linux_button.pack(fill="x")
+        ttk.Label(panel, text="Your USB drive is not changed until you confirm a write operation.", style="Muted.TLabel", wraplength=580).pack(anchor="w", pady=(8, 0))
 
 
 def main():

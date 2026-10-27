@@ -37,11 +37,13 @@ def elevation_command(command):
 
 class MacUSB(LinuxUSB):
     def __init__(self, root):
-        add_buttons(root, busy=lambda: getattr(self, "busy", False))
         super().__init__(root)
         root.title("WinUSB Creator — macOS / UEFI")
         self.append("macOS: for large WIM files, install wimlib with Homebrew: brew install wimlib.")
         self.append("Unmount USB volumes in Disk Utility; do not eject the drive itself.")
+
+    def add_setup_components(self):
+        add_buttons(self.root, busy=lambda: self.busy)
 
     def enumerate_devices(self):
         return macos_usb.list_devices()

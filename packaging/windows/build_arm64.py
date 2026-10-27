@@ -64,6 +64,7 @@ def main():
             sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onefile", "--windowed",
             "--name", NAME, "--paths", str(source / "прога"),
             "--icon", str(source / "прога/app_icon.ico"),
+            "--add-data", str(source / "прога/app_icon.png") + os.pathsep + ".",
             "--add-data", str(docs) + os.pathsep + "Documentation",
             "--distpath", str(work / "dist"), "--workpath", str(work / "work"),
             "--specpath", str(work), str(source / "packaging/windows/entry.py"),

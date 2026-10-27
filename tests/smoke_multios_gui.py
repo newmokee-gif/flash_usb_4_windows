@@ -23,6 +23,12 @@ def widgets(parent):
         yield from widgets(child)
 
 
+def destroy_window(root):
+    for job in root.tk.call("after", "info"):
+        root.after_cancel(job)
+    root.destroy()
+
+
 def check_setup_panels():
     for system, name in (("win32", "WinGet"), ("darwin", "Homebrew")):
         root = tk.Tk()
@@ -39,7 +45,7 @@ def check_setup_panels():
             assert button.cget("style") == "Setup.TButton"
             print(f"Prominent {name} setup panel: passed")
         finally:
-            root.destroy()
+            destroy_window(root)
 
 
 def check_windows_layout():
@@ -52,10 +58,11 @@ def check_windows_layout():
                    and any(isinstance(t, ast.Name) and t.id == "WINDOWS_ISO_CHOICES" for t in n.targets))
     scope = dict(tk=tk, ttk=ttk, os=os, add_buttons=package_manager_ui.add_buttons,
                  WINDOWS_ISO_CHOICES=choices)
-    exec(compile(ast.Module(body=[method], type_ignores=[]), "Windows layout", "exec"), scope)
+    busy = next(n for n in cls.body if isinstance(n, ast.FunctionDef) and n.name == "set_busy")
+    exec(compile(ast.Module(body=[method, busy], type_ignores=[]), "Windows layout", "exec"), scope)
     root = tk.Tk()
     try:
-        root.geometry("620x660")
+        root.geometry("900x850")
         app = SimpleNamespace(root=root, is_busy=False, tools_dir="/tmp", work_dir="Downloads")
         for name in ("selected_drive", "win_version", "torrent_source", "iso_path"):
             setattr(app, name, tk.StringVar(root))
@@ -70,10 +77,18 @@ def check_windows_layout():
         for button in (app.write_btn, app.dl_auto_btn, app.dl_custom_btn, app.dl_mag_btn):
             assert button.winfo_ismapped()
             assert button.winfo_width() >= button.winfo_reqwidth(), button.cget("text")
-            assert button.winfo_rooty() - root.winfo_rooty() + button.winfo_height() <= root.winfo_height()
-        print("English Windows layout: controls visible at 620x660")
+        app.ui_call = lambda callback: callback()
+        for value in (True, False):
+            scope["set_busy"](app, value)
+            assert str(app.write_btn.cget("state")) == ("disabled" if value else "normal")
+        root.geometry("800x700")
+        root.update()
+        root._content_canvas.yview_moveto(1)
+        root.update()
+        assert app.write_btn.winfo_rooty() + app.write_btn.winfo_height() <= root.winfo_rooty() + root.winfo_height()
+        print("Redesigned Windows layout: scrolling and busy states passed")
     finally:
-        root.destroy()
+        destroy_window(root)
 
 
 def main():
@@ -87,8 +102,10 @@ def main():
         try:
             chooser = OSChooser(root)
             root.update()
+            assert root._app_icon_img.width() == 256
             getattr(chooser, choice).invoke()
             root.update()
+            assert root._app_icon_img.width() == 256
             root.after(200, root.quit)
             root.mainloop()
             expected = "GNU/Linux" if choice == "linux_button" else "Linux / UEFI"
@@ -99,11 +116,17 @@ def main():
                 button = next(w for w in widgets(root) if w.winfo_class() == "TButton"
                               and w.cget("text") == "Install application dependencies")
                 assert button.winfo_ismapped()
-                assert button.winfo_rooty() - root.winfo_rooty() < 150
+                assert button.winfo_rooty() - root.winfo_rooty() < 300
                 assert button.winfo_height() >= 30
+                root._content_canvas.yview_moveto(1)
+                root.update()
+                write = next(w for w in widgets(root) if w.winfo_class() == "TButton"
+                             and w.cget("text") == "Write and verify USB")
+                assert write.winfo_rooty() >= root.winfo_rooty()
+                assert write.winfo_rooty() + write.winfo_height() <= root.winfo_rooty() + root.winfo_height()
             print(f"GUI chooser -> {choice}: passed")
         finally:
-            root.destroy()
+            destroy_window(root)
 
 
 if __name__ == "__main__":

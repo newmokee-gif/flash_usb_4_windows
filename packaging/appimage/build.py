@@ -21,7 +21,7 @@ import tempfile
 import urllib.request
 
 
-VERSION = "v0.3.3"
+VERSION = "v0.3.4"
 PYINSTALLER_VERSION = "6.22.3"
 # Binary hashes are GitHub's authoritative release-asset SHA256 digests:
 # https://github.com/AppImage/appimagetool/releases/expanded_assets/1.9.1
@@ -118,6 +118,7 @@ def build(source, output, work):
     subprocess.run([
         sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir",
         "--name", "flash-usb", "--paths", str(source / "прога"),
+        "--add-data", str(source / "прога/app_icon.png") + os.pathsep + ".",
         "--add-binary", f"{aria}:.",
         "--distpath", str(dist), "--workpath", str(work / "pyinstaller"),
         "--specpath", str(work), str(source / "packaging/appimage/entry.py"),
@@ -129,8 +130,8 @@ def build(source, output, work):
     appdir.chmod(0o755)
     copy(source / "packaging/appimage/AppRun", appdir / "AppRun", True)
     copy(source / "packaging/flash-usb.desktop", appdir / "flash-usb.desktop")
-    copy(source / "packaging/flash-usb.svg", appdir / "flash-usb.svg")
-    copy(source / "packaging/flash-usb.svg", appdir / ".DirIcon")
+    copy(source / "прога/app_icon.png", appdir / "flash-usb.png")
+    copy(source / "прога/app_icon.png", appdir / ".DirIcon")
     (appdir / "usr/bin").mkdir(parents=True)
     (appdir / "usr/bin/flash-usb").symlink_to("../lib/flash-usb/flash-usb")
     docs = appdir / "usr/share/doc/flash-usb"

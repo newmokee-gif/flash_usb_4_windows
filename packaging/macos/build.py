@@ -122,6 +122,8 @@ def main():
         subprocess.run([
             sys.executable, "-m", "PyInstaller", "--noconfirm", "--clean", "--onedir", "--windowed",
             "--name", "WinUSB Creator", "--target-architecture", args.arch,
+            "--icon", str(source / "packaging/icons/app_icon.icns"),
+            "--add-data", str(source / "прога/app_icon.png") + os.pathsep + ".",
             "--add-binary", str(Path(aria).resolve()) + os.pathsep + ".",
             "--osx-bundle-identifier", "org.newmokee.winusbcreator",
             "--paths", str(source / "прога"), "--distpath", str(work / "dist"),
@@ -159,8 +161,12 @@ def main():
                     shutil.copyfile(path, docs / ("PyInstaller-" + path.name))
         info = bundle / "Contents/Info.plist"
         data = plistlib.loads(info.read_bytes())
+        icon_name = data.get("CFBundleIconFile", "")
+        icon_file = resources / icon_name
+        if not icon_name or not icon_file.is_file() or icon_file.read_bytes() != (source / "packaging/icons/app_icon.icns").read_bytes():
+            raise RuntimeError("The macOS bundle does not contain the approved application icon")
         data.update(LSMinimumSystemVersion=MINIMUM_MACOS, NSHighResolutionCapable=True,
-                    CFBundleShortVersionString="0.3.3", CFBundleVersion="0.3.3")
+                    CFBundleShortVersionString="0.3.4", CFBundleVersion="0.3.4")
         info.write_bytes(plistlib.dumps(data))
         subprocess.run(["/usr/bin/codesign", "--force", "--deep", "--sign", "-", str(bundle)], check=True)
         check_bundle(bundle, args.arch, work / "smoke-built.json")

@@ -25,7 +25,7 @@ jobs:
           mkdir -p "release/$name/прога"
           cp flash_usb.py README.md LICENSE "release/$name/"
           cp прога/*.py "release/$name/прога/"
-          cp прога/app_icon.ico прога/app_icon.jpg "release/$name/прога/"
+          cp прога/app_icon.ico прога/app_icon.jpg прога/app_icon.png "release/$name/прога/"
           cp -r packaging "release/$name/"
           cp -r tests "release/$name/"
           find "release/$name" -type d -name __pycache__ -prune -exec rm -r {} +

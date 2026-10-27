@@ -16,7 +16,7 @@ class PayloadTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             stage = Path(temporary)
             build.stage_payload(ROOT, stage, 1700000000)
-            for name in ("package_manager_ui.py", "gnu_linux_gui.py", "dependencies.py"):
+            for name in ("package_manager_ui.py", "gnu_linux_gui.py", "dependencies.py", "app_icon.py", "app_icon.png", "ui_design.py"):
                 target = stage / "usr/share/flash-usb/прога" / name
                 self.assertEqual(target.read_bytes(), (ROOT / "прога" / name).read_bytes())
                 self.assertEqual(target.stat().st_mode & 0o777, 0o644)
